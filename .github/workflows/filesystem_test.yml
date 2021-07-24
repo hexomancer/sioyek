@@ -21,9 +21,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-
-
-
+    
+    - name: Print Cpp Version
+      run: g++ --version
+      
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
 
