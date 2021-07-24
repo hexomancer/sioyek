@@ -344,3 +344,8 @@ sioyek-release/*
 linux-deploy-binaries/*
 build/*
 *.zip
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
