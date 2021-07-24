@@ -37,8 +37,8 @@ jobs:
 
       run: ./build_and_release.sh
       env:
-        CC:   gcc-10
-        CXX:  g++-10
+        CC:   gcc-9
+        CXX:  g++-9
 
     - name: Release
       uses: softprops/action-gh-release@v1
