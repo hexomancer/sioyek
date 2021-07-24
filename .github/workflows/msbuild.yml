@@ -29,7 +29,7 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
     - name: Add msvc-dev-cmd
-    - uses: ilammy/msvc-dev-cmd@v1
+      uses: ilammy/msvc-dev-cmd@v1
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
