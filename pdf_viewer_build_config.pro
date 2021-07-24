@@ -56,6 +56,7 @@ SOURCES += pdf_viewer/book.cpp \
 
 
 win32{
+    RC_ICONS = pdf_viewer\icon2.ico
     LIBS += -Lmupdf\platform\win32\x64\Release -llibmupdf
     LIBS += opengl32.lib
 }
