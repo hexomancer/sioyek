@@ -33,7 +33,7 @@ jobs:
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
 
-      run: cxx filesystemtest.cpp -std=c++17
+      run: CXX filesystemtest.cpp -std=c++17
       env:
         CC:   gcc-9
         CXX:  g++-9
