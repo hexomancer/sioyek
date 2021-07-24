@@ -15,5 +15,5 @@ cp pdf_viewer\prefs.config sioyek-release-windows\prefs.config
 cp pdf_viewer\prefs_user.config sioyek-release-windows\prefs_user.config
 cp -r pdf_viewer\shaders sioyek-release-windows\shaders
 cp tutorial.pdf sioyek-release-windows\tutorial.pdf
-7z -r sioyek-release-windows.zip sioyek-release-windows
+7z a sioyek-release-windows.zip sioyek-release-windows
 
