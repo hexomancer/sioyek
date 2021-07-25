@@ -1,9 +1,7 @@
 mkdir -p linux-deploy-binaries
 cd linux-deploy-binaries
-curl -L https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage --output linuxdeploy-x86_64.AppImage
-curl -L https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage --output linuxdeploy-plugin-qt-x86_64.AppImage
-chmod +x linuxdeploy-x86_64.AppImage
-chmod +x linuxdeploy-plugin-qt-x86_64.AppImage
+curl -L https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+chmod +x linuxdeployqt-continuous-x86_64.AppImage
 cd ..
 
 cd mupdf
@@ -13,7 +11,7 @@ qmake pdf_viewer_build_config.pro
 rm -r AppDir 2> /dev/null
 make install INSTALL_ROOT=sioyek-release
 
-./linux-deploy-binaries/linuxdeploy-x86_64.AppImage --appdir sioyek-release --plugin qt
+./linux-deploy-binaries/linuxdeployqt-continuous-x86_64.AppImage sioyek-release/usr/share/applications/sioyek.desktop -appimage
 
 cp pdf_viewer/prefs.config sioyek-release/usr/bin/prefs.config
 cp pdf_viewer/prefs_user.config sioyek-release/usr/bin/prefs_user.config
