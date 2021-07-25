@@ -1,7 +1,3 @@
-cd mupdf\platform\win32\
-msbuild mupdf.sln /property:Configuration=Debug
-msbuild mupdf.sln /property:Configuration=Release
-cd ..\..\..
 qmake -tp vc pdf_viewer_build_config.pro
 msbuild sioyek.vcxproj /property:Configuration=Release
 rm -r sioyek-release-windows 2> NUL
