@@ -64,10 +64,10 @@ win32{
 }
 
 unix{
-    #QMAKE_CC = gcc-9
-    #QMAKE_CXX = g++-9
-    QMAKE_CC = CC
-    QMAKE_CXX = CXX
+    QMAKE_CC = gcc-9
+    QMAKE_CXX = g++-9
+    #QMAKE_CC = CC
+    #QMAKE_CXX = CXX
     QMAKE_CXXFLAGS += -std=c++17
     LIBS += -ldl -Lmupdf/build/release -lmupdf -lmupdf-third -lmupdf-threads -lharfbuzz
     isEmpty(PREFIX){
