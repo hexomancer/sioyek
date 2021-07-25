@@ -8,7 +8,7 @@ cd mupdf
 make USE_SYSTEM_HARFBUZZ=yes
 cd ..
 qmake pdf_viewer_build_config.pro
-rm -r AppDir 2> /dev/null
+rm -r sioyek-release 2> /dev/null
 make install INSTALL_ROOT=sioyek-release
 
 ./linux-deploy-binaries/linuxdeployqt-continuous-x86_64.AppImage sioyek-release/usr/share/applications/sioyek.desktop -appimage
