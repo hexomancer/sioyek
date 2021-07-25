@@ -14,9 +14,9 @@ make install INSTALL_ROOT=sioyek-release
 ./linux-deploy-binaries/linuxdeployqt-continuous-x86_64.AppImage sioyek-release/usr/share/applications/sioyek.desktop -appimage
 
 cp pdf_viewer/prefs.config sioyek-release/usr/bin/prefs.config
-cp pdf_viewer/prefs_user.config sioyek-release/usr/bin/prefs_user.config
+cp pdf_viewer/prefs_user.config sioyek-release/usr/share/prefs_user.config
 cp pdf_viewer/keys.config sioyek-release/usr/bin/keys.config
-cp pdf_viewer/keys_user.config sioyek-release/usr/bin/keys_user.config
+cp pdf_viewer/keys_user.config sioyek-release/usr/share/keys_user.config
 cp -r pdf_viewer/shaders sioyek-release/usr/bin/shaders
 cp tutorial.pdf sioyek-release/usr/bin/tutorial.pdf
 
