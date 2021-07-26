@@ -157,18 +157,6 @@ jobs:
     - name: Add msvc-dev-cmd
       uses: ilammy/msvc-dev-cmd@v1
       
-    
-    - name: Cache MuPDF
-      id: cache-mupdf
-      uses: actions/cache@v2
-      with:
-        path: mupdf\platform\win32\x64\Release
-        key: ${{ runner.os }}-primes
-
-    - name: Build Mupdf
-      if: steps.cache-mupdf.outputs.cache-hit != 'true'
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: .\build_mupdf.bat
       
     - name: Build Sioyek
       working-directory: ${{env.GITHUB_WORKSPACE}}
@@ -197,18 +185,6 @@ jobs:
     - name: Add msvc-dev-cmd
       uses: ilammy/msvc-dev-cmd@v1
       
-    
-    - name: Cache MuPDF
-      id: cache-mupdf
-      uses: actions/cache@v2
-      with:
-        path: mupdf\platform\win32\x64\Release
-        key: ${{ runner.os }}-primes
-
-    - name: Build Mupdf
-      if: steps.cache-mupdf.outputs.cache-hit != 'true'
-      working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: .\build_mupdf.bat
       
     - name: Build Sioyek
       working-directory: ${{env.GITHUB_WORKSPACE}}
