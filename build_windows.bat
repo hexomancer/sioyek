@@ -2,7 +2,11 @@ cd mupdf\platform\win32\
 msbuild mupdf.sln /property:Configuration=Debug
 msbuild mupdf.sln /property:Configuration=Release
 cd ..\..\..
-qmake -tp vc "DEFINES+=NON_PORTABLE" pdf_viewer_build_config.pro
+if %1 == portable (
+    qmake -tp vc pdf_viewer_build_config.pro
+) else (
+    qmake -tp vc "DEFINES+=NON_PORTABLE" pdf_viewer_build_config.pro
+)
 msbuild sioyek.vcxproj /property:Configuration=Release
 rm -r sioyek-release-windows 2> NUL
 mkdir sioyek-release-windows

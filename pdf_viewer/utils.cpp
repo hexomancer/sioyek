@@ -209,10 +209,10 @@ void install_app(const char *argv0)
 
 	sprintf(buf, "\"%s\" \"%%1\"", argv0);
 
-	SET_KEY(open, "FriendlyAppName", "TestPdf");
+	SET_KEY(open, "FriendlyAppName", "Sioyek");
 	SET_KEY(command, "", buf);
 	SET_KEY(supported_types, ".pdf", "");
-	SET_KEY(pdf_progids, "TestPdf", "");
+	SET_KEY(pdf_progids, "Sioyek", "");
 
 	RegCloseKey(dotpdf);
 	RegCloseKey(testpdf);
