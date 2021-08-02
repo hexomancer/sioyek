@@ -1428,12 +1428,19 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 		}
 
 		if (opened_docs_paths.size() > 0) {
-			current_widget = std::make_unique<FilteredSelectWindowClass<std::wstring>>(opened_docs_names, opened_docs_paths, [&](std::wstring* doc_path) {
-				if (doc_path->size() > 0) {
-					validate_render();
-					open_document(*doc_path);
-				}
-				}, config_manager, this);
+			current_widget = std::make_unique<FilteredSelectWindowClass<std::wstring>>(opened_docs_names,
+				opened_docs_paths,
+				[&](std::wstring* doc_path) {
+					if (doc_path->size() > 0) {
+						validate_render();
+						open_document(*doc_path);
+					}
+				},
+				config_manager,
+				this,
+				[&](std::wstring* doc_path) {
+					delete_opened_book(db, *doc_path);
+				});
 			current_widget->show();
 		}
 	}
@@ -1444,15 +1451,24 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 			option_names.push_back(main_document_view->get_document()->get_bookmarks()[i].description);
 			option_locations.push_back(main_document_view->get_document()->get_bookmarks()[i].y_offset);
 		}
-		current_widget = std::make_unique<FilteredSelectWindowClass<float>>(option_names, option_locations, [&](float* offset_value) {
-
-			if (offset_value) {
-				validate_render();
-				update_history_state();
-				main_document_view->set_offset_y(*offset_value);
-				push_state();
-			}
-			}, config_manager, this);
+		current_widget = std::make_unique<FilteredSelectWindowClass<float>>(
+			option_names,
+			option_locations,
+			[&](float* offset_value) {
+				if (offset_value) {
+					validate_render();
+					update_history_state();
+					main_document_view->set_offset_y(*offset_value);
+					push_state();
+				}
+			},
+			config_manager,
+			this,
+				[&](float* offset_value) {
+				if (offset_value) {
+					main_document_view->delete_closest_bookmark_to_offset(*offset_value);
+				}
+			});
 		current_widget->show();
 	}
 	else if (command->name == "goto_bookmark_g") {
@@ -1467,12 +1483,22 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 			descs.push_back(bm.description);
 			book_states.push_back({ path, bm.y_offset });
 		}
-		current_widget = std::make_unique<FilteredSelectWindowClass<BookState>>(descs, book_states, [&](BookState* book_state) {
-			if (book_state) {
-				validate_render();
-				open_document(book_state->document_path, 0.0f, book_state->offset_y);
-			}
-			}, config_manager, this);
+		current_widget = std::make_unique<FilteredSelectWindowClass<BookState>>(
+			descs,
+			book_states,
+			[&](BookState* book_state) {
+				if (book_state) {
+					validate_render();
+					open_document(book_state->document_path, 0.0f, book_state->offset_y);
+				}
+			},
+			config_manager,
+			this,
+			[&](BookState* book_state) {
+				if (book_state) {
+					delete_bookmark(db, book_state->document_path, book_state->offset_y);
+				}
+			});
 		current_widget->show();
 
 	}
