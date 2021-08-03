@@ -7,7 +7,7 @@ Path::Path() : Path(L"")
 
 Path::Path(const std::wstring& pathname)
 {
-	canon_path = canonicalize_path(pathname);
+	canon_path = get_canonical_path(pathname);
 }
 
 Path Path::slash(const std::wstring& suffix) const
@@ -64,11 +64,11 @@ void Path::create_directories()
 	QDir().mkpath(QString::fromStdWString(canon_path));
 }
 
-Path Path::add_redundant_dot() const
-{
-	std::wstring file_name = filename().value();
-	return parent().slash(L".").slash(file_name);
-}
+//std::wstring Path::add_redundant_dot() const
+//{
+//	std::wstring file_name = filename().value();
+//	return parent().get_path() + L"/./" + file_name;
+//}
 
 bool Path::exists() const
 {

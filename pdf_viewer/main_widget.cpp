@@ -46,6 +46,10 @@
 
 #include "main_widget.h"
 
+#ifndef MAX_PATH
+#define MAX_PATH PATH_MAX
+#endif
+
 extern bool LAUNCHED_FROM_FILE_ICON;
 extern bool SHOULD_USE_MULTIPLE_MONITORS;
 extern bool FLAT_TABLE_OF_CONTENTS;
@@ -81,8 +85,24 @@ void MainWidget::resizeEvent(QResizeEvent* resize_event) {
 
 	if ((main_document_view->get_document() != nullptr) && (main_document_view->get_zoom_level() == 0)) {
 		main_document_view->fit_to_page_width();
+		update_current_history_index();
 	}
 
+}
+
+std::optional<std::wstring> get_last_opened_file_name() {
+	char file_path[MAX_PATH] = { 0 };
+	std::string file_path_;
+	std::ifstream last_state_file(last_opened_file_address_path.get_path_utf8());
+	std::getline(last_state_file, file_path_);
+	last_state_file.close();
+
+	if (file_path_.size() > 0) {
+		return utf8_decode(file_path_);
+	}
+	else {
+		return {};
+	}
 }
 
 void MainWidget::mouseMoveEvent(QMouseEvent* mouse_event) {
@@ -427,10 +447,13 @@ void MainWidget::do_synctex_forward_search(const Path& pdf_file_path, const Path
 {
 
 	//Path latex_file_path_with_redundant_dot = add_redundant_dot_to_path(latex_file_path);
-	Path latex_file_path_with_redundant_dot = latex_file_path.add_redundant_dot();
+
+	//std::wstring latex_file_path_with_redundant_dot = latex_file_path.add_redundant_dot();
+	//std::wstring latex_file_path_with_redundant_dot = add_redun
+	std::wstring latex_file_path_with_redundant_dot = add_redundant_dot_to_path(latex_file_path.get_path());
 
 	std::string latex_file_string = latex_file_path.get_path_utf8();
-	std::string latex_file_with_redundant_dot_string = latex_file_path_with_redundant_dot.get_path_utf8();
+	std::string latex_file_with_redundant_dot_string = utf8_encode(latex_file_path_with_redundant_dot);
 	std::string pdf_file_string = pdf_file_path.get_path_utf8();
 
 	//latex_file_string = "D:/phd/seventh/./pres.tex";
@@ -573,6 +596,12 @@ void MainWidget::handle_args(const QStringList& arguments)
 
 	if (parser->positionalArguments().size() > 0) {
 		pdf_file_name = parser->positionalArguments().at(0).toStdWString();
+	}
+	else {
+		if (main_document_view->get_document() == nullptr) {
+			// when no file is specified, and no current file is open, use the last opened file or tutorial
+			pdf_file_name = get_last_opened_file_name().value_or(tutorial_path.get_path());
+		}
 	}
 
 	std::optional<std::wstring> latex_file_name = {};

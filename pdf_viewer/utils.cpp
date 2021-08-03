@@ -781,18 +781,18 @@ std::wstring join_string(const std::vector<std::wstring> parts, std::wstring sep
 	return std::move(res);
 }
 
-std::wstring canonicalize_path(const std::wstring& path_) {
-	std::wstring path  = QFileInfo(QString::fromStdWString(path_)).absoluteFilePath().toStdWString();
-
-	std::vector<std::wstring> parts;
-	split_path(path, parts);
-	return std::move(join_string(parts, L"/"));
-}
+//std::wstring canonicalize_path(const std::wstring& path_) {
+//	std::wstring path  = QFileInfo(QString::fromStdWString(path_)).absoluteFilePath().toStdWString();
+//
+//	std::vector<std::wstring> parts;
+//	split_path(path, parts);
+//	return std::move(join_string(parts, L"/"));
+//}
 
 void open_file(const std::wstring& path) {
 
 	//std::wstring generic_file_path = path.generic_wstring();
-	std::wstring canon_path = canonicalize_path(path);
+	std::wstring canon_path = get_canonical_path(path);
 	open_url(canon_path);
 
 }
@@ -1261,3 +1261,25 @@ std::wstring get_canonical_path(const std::wstring& path) {
 
 }
 
+std::wstring add_redundant_dot_to_path(const std::wstring& path) {
+	std::vector<std::wstring> parts;
+	split_path(path, parts);
+
+	std::wstring last = parts[parts.size() - 1];
+	parts.erase(parts.begin() + parts.size() - 1);
+	parts.push_back(L".");
+	parts.push_back(last);
+
+	std::wstring res = L"";
+	if (path[0] == '/') {
+		res = L"/";
+	}
+
+	for (int i = 0; i < parts.size(); i++) {
+		res.append(parts[i]);
+		if (i < parts.size() - 1) {
+			res.append(L"/");
+		}
+	}
+	return std::move(res);
+}
