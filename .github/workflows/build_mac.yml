@@ -1,0 +1,30 @@
+name: Build Mac
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-mac:
+
+    runs-on: macos-latest
+
+    steps:
+        
+    - uses: actions/checkout@v2
+      with:
+            submodules: 'recursive'
+            
+    - name: Install dependencies
+      run: sudo brew install freeglut mesa harfbuzz 
+      
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v2
+      with:
+        version: '5.14.2'
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: ./build_mac.sh
+
