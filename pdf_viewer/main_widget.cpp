@@ -50,7 +50,6 @@
 #define MAX_PATH PATH_MAX
 #endif
 
-extern bool LAUNCHED_FROM_FILE_ICON;
 extern bool SHOULD_USE_MULTIPLE_MONITORS;
 extern bool FLAT_TABLE_OF_CONTENTS;
 extern float MOVE_SCREEN_PERCENTAGE;
@@ -199,12 +198,7 @@ input_handler(input_handler)
 	int num_screens = QApplication::desktop()->numScreens();
 	if ((num_screens > 1) && SHOULD_USE_MULTIPLE_MONITORS) {
 		helper_opengl_widget->move(first_screen_width, 0);
-		if (!LAUNCHED_FROM_FILE_ICON) {
-			helper_opengl_widget->showMaximized();
-		}
-		else{
-			helper_opengl_widget->setWindowState(Qt::WindowState::WindowMaximized);
-		}
+		helper_opengl_widget->setWindowState(Qt::WindowState::WindowMaximized);
 	}
 
 	helper_opengl_widget->register_on_link_edit_listener([this](OpenedBookState state) {
@@ -733,6 +727,11 @@ void MainWidget::handle_command_with_symbol(const Command* command, char symbol)
 		}
 
 	}
+	else if (command->name == "add_highlight") {
+		main_document_view->add_highlight({ selection_begin_x, selection_begin_y }, { selection_end_x, selection_end_y }, symbol);
+		opengl_widget->selected_character_rects.clear();
+		selected_text.clear();
+	}
 	else if (command->name == "goto_mark") {
 		assert(main_document_view);
 
@@ -749,17 +748,6 @@ void MainWidget::handle_command_with_symbol(const Command* command, char symbol)
 			main_document_view->goto_mark(symbol);
 		}
 	}
-	//else if (command->name == "delete") {
-
-	//	if (symbol == input_handler->create_link_sumbol) {
-	//		main_document_view->delete_closest_link();
-	//		validate_render();
-	//	}
-	//	else if (symbol == input_handler->create_bookmark_symbol) {
-	//		main_document_view->delete_closest_bookmark();
-	//		validate_render();
-	//	}
-	//}
 }
 
 
@@ -1002,6 +990,9 @@ void MainWidget::handle_left_click(float x, float y, bool down) {
 	main_document_view->window_to_absolute_document_pos(x, y, &x_, &y_);
 
 	if (down == true) {
+		selection_begin_x = x_;
+		selection_begin_y = y_;
+
 		last_mouse_down_x = x_;
 		last_mouse_down_y = y_;
 		last_mouse_down_window_x = x;
@@ -1019,6 +1010,8 @@ void MainWidget::handle_left_click(float x, float y, bool down) {
 		}
 	}
 	else {
+		selection_end_x = x_;
+		selection_end_y = y_;
 
 		is_selecting = false;
 		is_dragging = false;
@@ -1139,6 +1132,8 @@ void MainWidget::set_main_document_view_state(DocumentViewState new_view_state) 
 
 void MainWidget::handle_click(int pos_x, int pos_y) {
 	auto link_ = main_document_view->get_link_in_pos(pos_x, pos_y);
+	selected_highlight_index = main_document_view->get_highlight_index_in_pos(pos_x, pos_y);
+
 	if (link_.has_value()) {
 		PdfLink link = link_.value();
 		int page;
@@ -1190,25 +1185,32 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
 		get_flat_chars_from_stext_page(stext_page, flat_chars);
 
 
-		std::optional<std::wstring> text_on_pointer = main_document_view->get_document()->get_text_at_position(flat_chars, offset_x, offset_y);
+		std::optional<std::pair<std::wstring, std::wstring>> generic_pair =\
+			main_document_view->get_document()->get_generic_link_name_at_position(flat_chars, offset_x, offset_y);
+
+		//std::optional<std::wstring> text_on_pointer = main_document_view->get_document()->get_text_at_position(flat_chars, offset_x, offset_y);
 		std::optional<std::wstring> paper_name_on_pointer = main_document_view->get_document()->get_paper_name_at_position(flat_chars, offset_x, offset_y);
 		std::optional<std::wstring> reference_text_on_pointer = main_document_view->get_document()->get_reference_text_at_position(flat_chars, offset_x, offset_y);
 		std::optional<std::wstring> equation_text_on_pointer = main_document_view->get_document()->get_equation_text_at_position(flat_chars, offset_x, offset_y);
 
-		bool was_figure = false;
+		if (generic_pair) {
+			int page;
+			float y_offset;
 
+			if (main_document_view->get_document()->find_generic_location(generic_pair.value().first,
+				generic_pair.value().second,
+				&page,
+				&y_offset)) {
+
+				long_jump_to_destination(page, y_offset);
+				return;
+			}
+		}
 		if (equation_text_on_pointer) {
 			 std::optional<IndexedData> eqdata_ = main_document_view->get_document()->find_equation_with_string(equation_text_on_pointer.value());
 			 if (eqdata_) {
 				 IndexedData refdata = eqdata_.value();
-				 update_history_state();
-
-				 float page_height = main_document_view->get_document()->get_page_height(refdata.page);
-
-				 main_document_view->goto_offset_within_page(refdata.page, main_document_view->get_offset_x(), refdata.y_offset);
-
-				 push_state();
-				 invalidate_render();
+				 long_jump_to_destination(refdata.page, refdata.y_offset);
 				 return;
 			 }
 		}
@@ -1217,43 +1219,18 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
 			 std::optional<IndexedData> refdata_ = main_document_view->get_document()->find_reference_with_string(reference_text_on_pointer.value());
 			 if (refdata_) {
 				 IndexedData refdata = refdata_.value();
-				 update_history_state();
-
-				 float page_height = main_document_view->get_document()->get_page_height(refdata.page);
-
-				 main_document_view->goto_offset_within_page(refdata.page, main_document_view->get_offset_x(), refdata.y_offset);
-
-				 push_state();
-				 invalidate_render();
+				 long_jump_to_destination(refdata.page, refdata.y_offset);
+				 return;
 			 }
 
 		}
-		else {
-
-			if (text_on_pointer) {
-
-				std::wstring figure_string = get_figure_string_from_raw_string(text_on_pointer.value());
-				if (figure_string.size() > 0) {
-					was_figure = true;
-
-					int fig_page;
-					float fig_offset;
-					if (main_document_view->get_document()->find_figure_with_string(figure_string, page, &fig_page, &fig_offset)) {
-						float offset_x = main_document_view->get_offset_x();
-						long_jump_to_destination(fig_page, offset_x, fig_offset);
-
-					}
+		if (paper_name_on_pointer) {
+			if (paper_name_on_pointer.value().size() > 5) {
+				if (is_shift_pressed) {
+					search_libgen(paper_name_on_pointer.value());
 				}
-
-			}
-			if ((!was_figure) && paper_name_on_pointer) {
-				if (paper_name_on_pointer.value().size() > 5) {
-					if (is_shift_pressed) {
-						search_libgen(paper_name_on_pointer.value());
-					}
-					else {
-						search_google_scholar(paper_name_on_pointer.value());
-					}
+				else {
+					search_google_scholar(paper_name_on_pointer.value());
 				}
 			}
 		}
@@ -1335,13 +1312,40 @@ void MainWidget::show_textbar(const std::wstring& command_name, bool should_fill
 	text_command_line_edit->setFocus();
 }
 
+
 void MainWidget::toggle_two_window_mode() {
+
+	//main_widget.resize(window_width, window_height);
+
+	QWidget* helper_window = get_top_level_widget(helper_opengl_widget);
+	QWidget* main_window = get_top_level_widget(opengl_widget);
+
 	if (helper_opengl_widget->isHidden()) {
-		helper_opengl_widget->show();
+		//helper_opengl_widget->show();
+		int num_screens = QApplication::desktop()->numScreens();
+		int window_width = QApplication::desktop()->screenGeometry(0).width();
+		int window_height = QApplication::desktop()->screenGeometry(0).height();
+
+		if (num_screens > 1) {
+
+			int second_window_width = QApplication::desktop()->screenGeometry(1).width();
+			int second_window_height = QApplication::desktop()->screenGeometry(1).height();
+
+			helper_window->resize(second_window_width, second_window_height);
+			helper_window->move(window_width, 0);
+		}
+		else {
+			main_window->resize(window_width / 2, window_height);
+			helper_window->resize(window_width / 2, window_height);
+			main_window->move(0, 0);
+			helper_window->move(window_width/2, 0);
+		}
+		helper_window->show();
+
 		activateWindow();
 	}
 	else {
-		helper_opengl_widget->hide();
+		helper_window->hide();
 	}
 }
 
@@ -1477,6 +1481,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 		main_document_view->goto_chapter(-rp);
 	}
 
+
 	else if (command->name == "goto_toc") {
 		if (main_document_view->get_document()->has_toc()) {
 			if (FLAT_TABLE_OF_CONTENTS) {
@@ -1564,6 +1569,45 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 			});
 		current_widget->show();
 	}
+	else if (command->name == "goto_highlight") {
+		std::vector<std::wstring> option_names;
+		std::vector<std::vector<float>> option_locations;
+		const std::vector<Highlight>& highlights = main_document_view->get_document()->get_highlights_sorted();
+
+
+		for (int i = 0; i < highlights.size(); i++) {
+			std::wstring type_name = L"a";
+			type_name[0] = highlights[i].type;
+
+			option_names.push_back(L"[" + type_name + L"] " + highlights[i].description + L"]");
+			//option_locations.push_back(highlights[i].selection_begin.y);
+			option_locations.push_back({highlights[i].selection_begin.x, highlights[i].selection_begin.y, highlights[i].selection_end.x, highlights[i].selection_end.y});
+		}
+
+		current_widget = std::make_unique<FilteredSelectWindowClass<std::vector<float>>>(
+			option_names,
+			option_locations,
+			[&](std::vector<float>* offset_values) {
+				if (offset_values) {
+					validate_render();
+					update_history_state();
+					main_document_view->set_offset_y((*offset_values)[1]);
+					push_state();
+				}
+			},
+			config_manager,
+			this,
+				[&](std::vector<float>* offset_values) {
+				if (offset_values) {
+					float begin_x = (*(offset_values))[0];
+					float begin_y = (*(offset_values))[1];
+					float end_x = (*(offset_values))[2];
+					float end_y = (*(offset_values))[3];
+					main_document_view->delete_highlight_with_offsets(begin_x, begin_y, end_x, end_y);
+				}
+			});
+		current_widget->show();
+	}
 	else if (command->name == "goto_bookmark_g") {
 		std::vector<std::pair<std::wstring, BookMark>> global_bookmarks;
 		global_select_bookmark(db, global_bookmarks);
@@ -1573,7 +1617,10 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 		for (const auto& desc_bm_pair : global_bookmarks) {
 			std::wstring path = desc_bm_pair.first;
 			BookMark bm = desc_bm_pair.second;
-			descs.push_back(bm.description);
+
+			std::wstring file_name = Path(path).filename().value_or(L"");
+
+			descs.push_back(bm.description + L" {" + file_name + L"}");
 			book_states.push_back({ path, bm.y_offset });
 		}
 		current_widget = std::make_unique<FilteredSelectWindowClass<BookState>>(
@@ -1592,6 +1639,38 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 					delete_bookmark(db, book_state->document_path, book_state->offset_y);
 				}
 			});
+		current_widget->show();
+
+	}
+	else if (command->name == "goto_highlight_g") {
+		std::vector<std::pair<std::wstring, Highlight>> global_highlights;
+		global_select_highlight(db, global_highlights);
+		std::vector<std::wstring> descs;
+		std::vector<BookState> book_states;
+
+		for (const auto& desc_hl_pair : global_highlights) {
+			std::wstring path = desc_hl_pair.first;
+			Highlight hl = desc_hl_pair.second;
+
+			std::wstring file_name = Path(path).filename().value_or(L"");
+
+			std::wstring highlight_type_string = L"a";
+			highlight_type_string[0] = hl.type;
+
+			descs.push_back(L"[" + highlight_type_string + L"]" + hl.description + L" {" + file_name + L"}");
+			book_states.push_back({ path, hl.selection_begin.y });
+		}
+		current_widget = std::make_unique<FilteredSelectWindowClass<BookState>>(
+			descs,
+			book_states,
+			[&](BookState* book_state) {
+				if (book_state) {
+					validate_render();
+					open_document(book_state->document_path, 0.0f, book_state->offset_y);
+				}
+			},
+			config_manager,
+				this);
 		current_widget->show();
 
 	}
@@ -1617,6 +1696,15 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 	else if (command->name == "delete_link") {
 
 		main_document_view->delete_closest_link();
+		validate_render();
+	}
+
+	else if (command->name == "delete_highlight") {
+
+		if (selected_highlight_index != -1) {
+			main_document_view->delete_highlight_with_index(selected_highlight_index);
+			selected_highlight_index = -1;
+		}
 		validate_render();
 	}
 
@@ -1768,6 +1856,10 @@ void MainWidget::complete_pending_link(const DocumentViewState& destination_view
 	pl.dst = destination_view_state;
 	main_document_view->get_document()->add_link(pl);
 	pending_link = {};
+}
+
+void MainWidget::long_jump_to_destination(int page, float offset_y) {
+	long_jump_to_destination(page, main_document_view->get_offset_x(), offset_y);
 }
 
 void MainWidget::long_jump_to_destination(int page, float offset_x, float offset_y)

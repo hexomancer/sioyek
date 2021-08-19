@@ -26,6 +26,7 @@ private:
 
 	std::vector<Mark> marks;
 	std::vector<BookMark> bookmarks;
+	std::vector<Highlight> highlights;
 	std::vector<Link> links;
 	sqlite3* db = nullptr;
 	std::vector<TocNode*> top_level_toc_nodes;
@@ -53,7 +54,7 @@ private:
 	// The reason that we use a hashmap for reference_indices and a vector for figures is that
 	// the reference we are looking for is usually the last reference with that name, but this is not
 	// necessarily true for the figures.
-	std::vector<IndexedData> figure_indices;
+	std::vector<IndexedData> generic_indices;
 	std::map<std::wstring, IndexedData> reference_indices;
 	std::map<std::wstring, IndexedData> equation_indices;
 
@@ -61,6 +62,7 @@ private:
 	std::optional<std::thread> figure_indexing_thread = {};
 	bool is_figure_indexing_required = true;
 	bool is_indexing = false;
+	bool are_highlights_loaded = false;
 
 	QDateTime last_update_time;
 
@@ -83,6 +85,7 @@ public:
 	fz_document* doc = nullptr;
 
 	void add_bookmark(const std::wstring& desc, float y_offset);
+	void add_highlight(const std::wstring& desc, const std::vector<fz_rect>& highlight_rects, fz_point selection_begin, fz_point selection_end, char type);
 	void count_chapter_pages(std::vector<int> &page_counts);
 	void convert_toc_tree(fz_outline* root, std::vector<TocNode*>& output);
 	void count_chapter_pages_accum(std::vector<int> &page_counts);
@@ -94,8 +97,12 @@ public:
 	std::optional<Link> find_closest_link(float to_offset_y, int* index = nullptr);
 	bool update_link(Link new_link);
 	void delete_closest_bookmark(float to_y_offset);
+	void delete_highlight_with_index(int index);
+	void delete_highlight_with_offsets(float begin_x, float begin_y, float end_x, float end_y);
 	void delete_closest_link(float to_offset_y);
 	const std::vector<BookMark>& get_bookmarks() const;
+	const std::vector<Highlight>& get_highlights() const;
+	const std::vector<Highlight> get_highlights_sorted() const;
 	fz_link* get_page_links(int page_number);
 	void add_mark(char symbol, float y_offset);
 	bool remove_mark(char symbol);
@@ -129,14 +136,23 @@ public:
 	int get_offset_page_number(float y_offset);
 	void index_figures(bool* invalid_flag);
 	void stop_indexing();
-	bool find_figure_with_string(std::wstring figure_name, int reference_page, int* page, float* y_offset);
 	std::optional<IndexedData> find_reference_with_string(std::wstring reference_name);
 	std::optional<IndexedData> find_equation_with_string(std::wstring equation_name);
 
-	std::optional<std::wstring> get_text_at_position(std::vector<fz_stext_char*> flat_chars, float offset_x, float offset_y);
-	std::optional<std::wstring> get_reference_text_at_position(std::vector<fz_stext_char*> flat_chars, float offset_x, float offset_y);
-	std::optional<std::wstring> get_paper_name_at_position(std::vector<fz_stext_char*> flat_chars, float offset_x, float offset_y);
-	std::optional<std::wstring> get_equation_text_at_position(std::vector<fz_stext_char*> flat_chars, float offset_x, float offset_y);
+	std::optional<std::wstring> get_text_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y);
+	std::optional<std::wstring> get_reference_text_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y);
+	std::optional<std::wstring> get_paper_name_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y);
+	std::optional<std::wstring> get_equation_text_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y);
+	std::optional<std::pair<std::wstring, std::wstring>> get_generic_link_name_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y);
+	std::optional<std::wstring> get_regex_match_at_position(const std::wregex& regex, const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y);
+	bool find_generic_location(const std::wstring& type, const std::wstring& name, int* page, float* y_offset);
+	bool can_use_highlights();
+
+	void get_text_selection(fz_point selection_begin,
+		fz_point selection_end,
+		bool is_word_selection,
+		std::vector<fz_rect>& selected_characters,
+		std::wstring& selected_text);
 
 	friend class DocumentManager;
 };
