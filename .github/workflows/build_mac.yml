@@ -60,7 +60,7 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: |
         chmod +x build_mac.sh
-        ./build_mac.sh portable
+        ./build_mac.sh
         
     - name: upload mac artifact
       uses: actions/upload-artifact@v1
