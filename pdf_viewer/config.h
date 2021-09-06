@@ -5,6 +5,8 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
+#include <optional>
+#include "path.h"
 
 
 struct Config {
@@ -28,11 +30,13 @@ class ConfigManager {
 	float DEFAULT_LINK_HIGHLIGHT_COLOR[3];
 	float DEFAULT_SYNCTEX_HIGHLIGHT_COLOR[3];
 
+	std::vector<Path> user_config_paths;
+
 public:
 
-	ConfigManager(const std::wstring& default_path,const std::wstring& user_path);
+	ConfigManager(const Path& default_path,const std::vector<Path>& user_paths);
 	//void serialize(std::wofstream& file);
-	void deserialize(std::wifstream& default_file, std::wifstream& user_file);
+	void deserialize(const Path& default_file_path, const std::vector<Path>& user_file_paths);
 	template<typename T>
 	const T* get_config(std::wstring name) {
 
@@ -43,4 +47,5 @@ public:
 		if (raw_pointer == nullptr) return nullptr;
 		return (T*)raw_pointer;
 	}
+	std::optional<Path> get_or_create_user_config_file();
 };

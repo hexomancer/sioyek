@@ -73,11 +73,14 @@
 #include "main_widget.h"
 #include "path.h"
 #include "RunGuard.h"
+#include "checksum.h"
 
 #define FTS_FUZZY_MATCH_IMPLEMENTATION
 #include "fts_fuzzy_match.h"
 #undef FTS_FUZZY_MATCH_IMPLEMENTATION
 
+
+//#define LINUX_STANDARD_PATHS
 
 
 extern std::wstring APPLICATION_NAME = L"sioyek";
@@ -131,11 +134,12 @@ extern std::wstring GOOGLE_SCHOLAR_ADDRESS = L"";
 extern std::wstring INVERSE_SEARCH_COMMAND = L"";
 extern bool SHOULD_LOAD_TUTORIAL_WHEN_NO_OTHER_FILE = false;
 extern bool SHOULD_LAUNCH_NEW_INSTANCE = true;
+extern bool SHOULD_DRAW_UNRENDERED_PAGES = true;
 
 extern Path default_config_path(L"");
 extern Path default_keys_path(L"");
-extern Path user_config_path(L"");
-extern Path user_keys_path(L"");
+extern std::vector<Path> user_config_paths = {};
+extern std::vector<Path> user_keys_paths = {};
 extern Path database_file_path(L"");
 extern Path tutorial_path(L"");
 extern Path last_opened_file_address_path(L"");
@@ -149,7 +153,27 @@ void configure_paths(){
 	shader_path = parent_path.slash(L"shaders");
 
 
+
 #ifdef Q_OS_LINUX
+	QStringList all_config_paths = QStandardPaths::standardLocations(QStandardPaths::AppConfigLocation);
+#ifdef LINUX_STANDARD_PATHS
+	Path home_path(QDir::homePath().toStdWString());
+	Path standard_data_path = home_path.slash(L".local").slash(L"share").slash(L"sioyek");
+	Path standard_config_path = home_path.slash(L".config").slash(L"sioyek");
+
+	default_config_path = standard_config_path.slash(L"prefs.config");
+	default_keys_path = standard_config_path.slash(L"keys.config");
+
+	for (int i = 0; i < all_config_paths.size(); i++) {
+		user_config_paths.push_back(Path(all_config_paths.at(i).toStdWString()).slash(L"prefs_user.config"));
+		user_keys_paths.push_back(Path(all_config_paths.at(i).toStdWString()).slash(L"keys_user.config"));
+	}
+
+	database_file_path = standard_data_path.slash(L"test.db");
+	tutorial_path = standard_data_path.slash(L"tutorial.pdf");
+	last_opened_file_address_path = standard_data_path.slash(L"last_document_path.txt");
+	shader_path = standard_data_path.slash(L"shaders");
+#else
 	char* APPDIR = std::getenv("XDG_CONFIG_HOME");
 
 	if (!APPDIR){
@@ -161,16 +185,18 @@ void configure_paths(){
 	standard_data_path.create_directories();
 
 	default_config_path = parent_path.slash(L"prefs.config");
-	user_config_path = standard_data_path.slash(L"prefs_user.config");
+	//user_config_path = standard_data_path.slash(L"prefs_user.config");
+	user_config_paths.push_back(standard_data_path.slash(L"prefs_user.config"));
 	default_keys_path = parent_path.slash(L"keys.config");
-	user_keys_path = standard_data_path.slash(L"keys_user.config");
+	user_keys_paths.push_back(standard_data_path.slash(L"keys_user.config"));
 	database_file_path = standard_data_path.slash(L"test.db");
 	tutorial_path = standard_data_path.slash(L"tutorial.pdf");
 	last_opened_file_address_path = standard_data_path.slash(L"last_document_path.txt");
 
-	if (!tutorial_path.exists()) {
+	if (!tutorial_path.file_exists()) {
 		copy_file(parent_path.slash(L"tutorial.pdf"), tutorial_path);
 	}
+#endif
 #else //windows
 #ifdef NDEBUG
 	//install_app(exe_path.c_str());
@@ -183,13 +209,13 @@ void configure_paths(){
 	tutorial_path = parent_path.slash(L"tutorial.pdf");
 
 #ifdef NON_PORTABLE
-	user_config_path = standard_data_path.slash(L"prefs_user.config");
-	user_keys_path = standard_data_path.slash(L"keys_user.config");
+	user_config_paths.push_back(standard_data_path.slash(L"prefs_user.config"));
+	user_keys_paths.push_back(standard_data_path.slash(L"keys_user.config"));
 	database_file_path = standard_data_path.slash(L"test.db");
 	last_opened_file_address_path = standard_data_path.slash(L"last_document_path.txt");
 #else
-	user_config_path = parent_path.slash(L"prefs_user.config");
-	user_keys_path = parent_path.slash(L"keys_user.config");
+	user_config_paths.push_back(parent_path.slash(L"prefs_user.config"));
+	user_keys_paths.push_back(parent_path.slash(L"keys_user.config"));
 	database_file_path = parent_path.slash(L"test.db");
 	last_opened_file_address_path = parent_path.slash(L"last_document_path.txt");
 #endif
@@ -197,6 +223,29 @@ void configure_paths(){
 #endif
 }
 
+void verify_paths(){
+#define CHECK_DIR_EXIST(path) do{ if(!(path).dir_exists() ) std::wcout << L"Error: " << #path << ": " << path << L" doesn't exist!\n"; } while(false)
+#define CHECK_FILE_EXIST(path) do{ if(!(path).file_exists() ) std::wcout << L"Error: " << #path << ": " << path << L" doesn't exist!\n"; } while(false)
+
+    std::wcout << L"default_config_path: " << default_config_path << L"\n";
+    CHECK_FILE_EXIST(default_config_path);
+    std::wcout << L"default_keys_path: " << default_keys_path << L"\n";
+    CHECK_FILE_EXIST(default_keys_path);
+    for (size_t i = 0; i < user_config_paths.size(); i++) {
+        std::wcout << L"user_config_path: [ " << i << " ] " << user_config_paths[i] << L"\n";
+    }
+    for (size_t i = 0; i < user_keys_paths.size(); i++) {
+        std::wcout << L"user_keys_path: [ " << i << " ] " << user_keys_paths[i] << L"\n";
+    }
+    std::wcout << L"database_file_path: " << database_file_path << L"\n";
+    std::wcout << L"tutorial_path: " << tutorial_path << L"\n";
+    std::wcout << L"last_opened_file_address_path: " << last_opened_file_address_path << L"\n";
+    std::wcout << L"shader_path: " << shader_path << L"\n";
+    CHECK_DIR_EXIST(shader_path);
+
+#undef CHECK_DIR_EXIST
+#undef CHECK_FILE_EXIST
+}
 
 std::mutex mupdf_mutexes[FZ_LOCK_MAX];
 
@@ -218,25 +267,6 @@ int main(int argc, char* args[]) {
 	format.setProfile(QSurfaceFormat::CoreProfile);
 	QSurfaceFormat::setDefaultFormat(format);
 
-	// we need an application in order to be able to use QCoreApplication::applicationDirPath
-	QApplication* dummy_application = new QApplication(argc, args);
-	configure_paths();
-	delete dummy_application;
-
-	std::wcout << L"default_config_path: " << default_config_path << L"\n";
-	std::wcout << L"default_keys_path: " << default_keys_path << L"\n";
-	std::wcout << L"user_config_path: " << user_config_path << L"\n";
-	std::wcout << L"user_keys_path: " << user_keys_path << L"\n";
-	std::wcout << L"database_file_path: " << database_file_path << L"\n";
-	std::wcout << L"tutorial_path: " << tutorial_path << L"\n";
-	std::wcout << L"last_opened_file_address_path" << last_opened_file_address_path << L"\n";
-	std::wcout << L"shader_path" << shader_path << L"\n";
-
-	create_file_if_not_exists(user_keys_path.get_path());
-	create_file_if_not_exists(user_config_path.get_path());
-
-	ConfigManager config_manager(default_config_path.get_path(), user_config_path.get_path());
-
 	// should we launche a new instance each time the user opens a PDF or should we reuse the previous instance
 	bool use_single_instance = !SHOULD_LAUNCH_NEW_INSTANCE;
 
@@ -249,6 +279,11 @@ int main(int argc, char* args[]) {
 
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
 	QApplication app(argc, args);
+
+	configure_paths();
+	verify_paths();
+
+	ConfigManager config_manager(default_config_path, user_config_paths);
 
 	RunGuard guard("sioyek");
 
@@ -311,19 +346,33 @@ int main(int argc, char* args[]) {
 
 	bool quit = false;
 
-	InputHandler input_handler(default_keys_path.get_path(), user_keys_path.get_path());
+	InputHandler input_handler(default_keys_path, user_keys_paths);
 
+	std::vector<std::pair<std::wstring, std::wstring>> prev_path_hash_pairs;
+	get_prev_path_hash_pairs(db, prev_path_hash_pairs);
 
-	DocumentManager document_manager(mupdf_context, db);
+	if (prev_path_hash_pairs.size() == 0) {
+		// migrate the databse paths to checksums the first time we launch the new version
+		upgrade_database_hashes(db);
+		get_prev_path_hash_pairs(db, prev_path_hash_pairs);
+	}
+
+	CachedChecksummer checksummer(&prev_path_hash_pairs);
+
+	DocumentManager document_manager(mupdf_context, db, &checksummer);
 
 	QFileSystemWatcher pref_file_watcher;
 	pref_file_watcher.addPath(QString::fromStdWString(default_config_path.get_path()));
-	pref_file_watcher.addPath(QString::fromStdWString(user_config_path.get_path()));
+	for (int i = 0; i < user_config_paths.size(); i++) {
+		pref_file_watcher.addPath(QString::fromStdWString(user_config_paths[i].get_path()));
+	}
 
 
 	QFileSystemWatcher key_file_watcher;
 	key_file_watcher.addPath(QString::fromStdWString(default_keys_path.get_path()));
-	key_file_watcher.addPath(QString::fromStdWString(user_keys_path.get_path()));
+	for (int i = 0; i < user_keys_paths.size(); i++) {
+		key_file_watcher.addPath(QString::fromStdWString(user_keys_paths[i].get_path()));
+	}
 
 
 	//QString font_path = QString::fromStdWString((parent_path / "fonts" / "monaco.ttf").wstring());
@@ -334,7 +383,7 @@ int main(int argc, char* args[]) {
 	//QIcon icon(QString::fromStdWString((parent_path / "icon2.ico").wstring()));
 	//app.setWindowIcon(icon);
 
-	MainWidget main_widget(mupdf_context, db, &document_manager, &config_manager, &input_handler, &quit);
+	MainWidget main_widget(mupdf_context, db, &document_manager, &config_manager, &input_handler, &checksummer, &quit);
 	//main_widget.open_document(file_path.get_path());
 	//main_widget.resize(500, 500);
 
@@ -343,6 +392,7 @@ int main(int argc, char* args[]) {
 			QObject::connect(&guard, &RunGuard::messageReceived, [&main_widget](const QByteArray& message) {
 				QStringList args = deserialize_string_array(message);
 				main_widget.handle_args(args);
+				main_widget.activateWindow();
 				});
 		}
 	}
@@ -357,19 +407,15 @@ int main(int argc, char* args[]) {
 
 	// live reload the config file
 	QObject::connect(&pref_file_watcher, &QFileSystemWatcher::fileChanged, [&]() {
-		std::wifstream default_config_file(default_config_path.get_path_utf8());
-		std::wifstream user_config_file(user_config_path.get_path_utf8());
 
-		config_manager.deserialize(default_config_file, user_config_file);
-		default_config_file.close();
-		user_config_file.close();
+		config_manager.deserialize(default_config_path, user_config_paths);
 
 		ConfigFileChangeListener::notify_config_file_changed(&config_manager);
 		main_widget.validate_render();
 		});
 
 	QObject::connect(&key_file_watcher, &QFileSystemWatcher::fileChanged, [&]() {
-		input_handler.reload_config_files(default_keys_path.get_path(), user_keys_path.get_path());
+		input_handler.reload_config_files(default_keys_path, user_keys_paths);
 		});
 
 	if (SHOULD_CHECK_FOR_LATEST_VERSION_ON_STARTUP) {
