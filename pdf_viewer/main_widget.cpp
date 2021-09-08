@@ -172,7 +172,7 @@ void MainWidget::closeEvent(QCloseEvent* close_event) {
 }
 
 MainWidget::MainWidget(fz_context* mupdf_context,
-	sqlite3* db,
+	DatabaseManager* db_manager,
 	DocumentManager* document_manager,
 	ConfigManager* config_manager,
 	InputHandler* input_handler,
@@ -181,7 +181,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 	QWidget* parent):
 	QWidget(parent),
 	mupdf_context(mupdf_context),
-	db(db),
+	db_manager(db_manager),
 	document_manager(document_manager),
 	config_manager(config_manager),
 	input_handler(input_handler),
@@ -197,10 +197,10 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 	pdf_renderer->start_threads();
 
 
-	main_document_view = new DocumentView(mupdf_context, db, document_manager, config_manager, checksummer);
+	main_document_view = new DocumentView(mupdf_context, db_manager, document_manager, config_manager, checksummer);
 	opengl_widget = new PdfViewOpenGLWidget(main_document_view, pdf_renderer, config_manager, false, this);
 
-	helper_document_view = new DocumentView(mupdf_context, db, document_manager, config_manager, checksummer);
+	helper_document_view = new DocumentView(mupdf_context, db_manager, document_manager, config_manager, checksummer);
 	helper_opengl_widget = new PdfViewOpenGLWidget(helper_document_view, pdf_renderer, config_manager, true);
 
 	// automatically open the helper window in second monitor
@@ -694,7 +694,7 @@ void MainWidget::update_link_with_opened_book_state(Link lnk, const OpenedBookSt
 		link_owner->update_link(lnk);
 	}
 
-	update_link(db, link_owner->get_checksum(),
+	db_manager->update_link(link_owner->get_checksum(),
 		new_state.offset_x, new_state.offset_y, new_state.zoom_level, lnk.src_offset_y);
 
 	link_to_edit = {};
@@ -725,7 +725,7 @@ void MainWidget::handle_command_with_symbol(const Command* command, char symbol)
 
 		// it is a global mark, we delete other marks with the same symbol from database and add the new mark
 		if (isupper(symbol)) {
-			delete_mark_with_symbol(db, symbol);
+			db_manager->delete_mark_with_symbol(symbol);
 			// we should also delete the cached marks
 			document_manager->delete_global_mark(symbol);
 			main_document_view->add_mark(symbol);
@@ -746,7 +746,7 @@ void MainWidget::handle_command_with_symbol(const Command* command, char symbol)
 
 		if (isupper(symbol)) { // global mark
 			std::vector<std::pair<std::string, float>> mark_vector;
-			select_global_mark(db, symbol, mark_vector);
+			db_manager->select_global_mark(symbol, mark_vector);
 			if (mark_vector.size() > 0) {
 				assert(mark_vector.size() == 1); // we can not have more than one global mark with the same name
 				std::wstring doc_path = checksummer->get_path(mark_vector[0].first).value();
@@ -770,6 +770,13 @@ void MainWidget::open_document(const LinkViewState& lvs) {
 	}
 }
 
+void MainWidget::open_document_with_hash(const std::string& path, std::optional<float> offset_x, std::optional<float> offset_y, std::optional<float> zoom_level) {
+	std::optional<std::wstring> maybe_path = checksummer->get_path(path);
+	if (maybe_path) {
+		Path path(maybe_path.value());
+		open_document(path, offset_x, offset_y, zoom_level);
+	}
+}
 
 void MainWidget::open_document(const Path& path, std::optional<float> offset_x, std::optional<float> offset_y, std::optional<float> zoom_level) {
 
@@ -1125,7 +1132,7 @@ void MainWidget::prev_state()
 				link_owner->update_link(link_to_edit.value());
 			}
 
-			update_link(db, checksummer->get_checksum(history[current_history_index].document_path),
+			db_manager->update_link(checksummer->get_checksum(history[current_history_index].document_path),
 				state.offset_x, state.offset_y, state.zoom_level, link_to_edit->src_offset_y);
 			link_to_edit = {};
 		}
@@ -1544,27 +1551,41 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 		}
 	}
 	else if (command->name == "open_prev_doc") {
-		std::vector<std::wstring> opened_docs_paths;
+		//std::vector<std::pair<std::wstring, std::wstring>> opened_docs_hash_path_pairs;
 		std::vector<std::wstring> opened_docs_names;
-		select_prev_docs(db, opened_docs_paths);
+		std::vector<std::wstring> opened_docs_hashes;
 
-		for (const auto& p : opened_docs_paths) {
-			opened_docs_names.push_back(Path(p).filename().value_or(L"<ERROR>"));
+		db_manager->select_opened_books_path_values(opened_docs_hashes);
+
+		for (const auto& doc_hash : opened_docs_hashes) {
+			std::optional<std::wstring> path = checksummer->get_path(utf8_encode(doc_hash));
+			if (path) {
+				opened_docs_names.push_back(Path(path.value()).filename().value_or(L"<ERROR>"));
+			}
+			else {
+				opened_docs_names.push_back(L"<ERROR>");
+			}
 		}
+		//db_manager->get_prev_path_hash_pairs(opened_docs_hash_path_pairs);
 
-		if (opened_docs_paths.size() > 0) {
+		//for (const auto& [path, hash] : opened_docs_hash_path_pairs) {
+		//	opened_docs_names.push_back(Path(path).filename().value_or(L"<ERROR>"));
+		//	opened_docs_hashes.push_back(utf8_encode(hash));
+		//}
+
+		if (opened_docs_hashes.size() > 0) {
 			current_widget = std::make_unique<FilteredSelectWindowClass<std::wstring>>(opened_docs_names,
-				opened_docs_paths,
-				[&](std::wstring* doc_path) {
-					if (doc_path->size() > 0) {
+				opened_docs_hashes,
+				[&](std::wstring* doc_hash) {
+					if (doc_hash->size() > 0) {
 						validate_render();
-						open_document(*doc_path);
+						open_document_with_hash(utf8_encode(*doc_hash));
 					}
 				},
 				config_manager,
 				this,
-				[&](std::wstring* doc_path) {
-					delete_opened_book(db, *doc_path);
+				[&](std::wstring* doc_hash) {
+					db_manager->delete_opened_book(utf8_encode(*doc_hash));
 				});
 			current_widget->show();
 		}
@@ -1637,7 +1658,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 	}
 	else if (command->name == "goto_bookmark_g") {
 		std::vector<std::pair<std::string, BookMark>> global_bookmarks;
-		global_select_bookmark(db, global_bookmarks);
+		db_manager->global_select_bookmark(global_bookmarks);
 		std::vector<std::wstring> descs;
 		std::vector<BookState> book_states;
 
@@ -1664,7 +1685,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 			this,
 			[&](BookState* book_state) {
 				if (book_state) {
-					delete_bookmark(db, checksummer->get_checksum(book_state->document_path), book_state->offset_y);
+					db_manager->delete_bookmark(checksummer->get_checksum(book_state->document_path), book_state->offset_y);
 				}
 			});
 		current_widget->show();
@@ -1672,7 +1693,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 	}
 	else if (command->name == "goto_highlight_g") {
 		std::vector<std::pair<std::string, Highlight>> global_highlights;
-		global_select_highlight(db, global_highlights);
+		db_manager->global_select_highlight(global_highlights);
 		std::vector<std::wstring> descs;
 		std::vector<BookState> book_states;
 
@@ -1791,8 +1812,7 @@ void MainWidget::handle_link() {
 				}
 			}
 
-			insert_link(db,
-				checksummer->get_checksum(source_path.value()),
+			db_manager->insert_link(checksummer->get_checksum(source_path.value()),
 				pl.dst.document_checksum,
 				pl.dst.book_state.offset_x,
 				pl.dst.book_state.offset_y,
@@ -1902,11 +1922,11 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
 		}
 		else if (text == L"export") {
 			std::wstring export_file_name = select_new_json_file_name();
-			export_json(db, export_file_name, checksummer);
+			db_manager->export_json(export_file_name, checksummer);
 		}
 		else if (text == L"import") {
 			std::wstring import_file_name = select_json_file_name();
-			import_json(db, import_file_name, checksummer);
+			db_manager->import_json(import_file_name, checksummer);
 		}
 	}
 }

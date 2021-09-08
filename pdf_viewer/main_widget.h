@@ -31,7 +31,7 @@ class MainWidget : public QWidget, ConfigFileChangeListener{
 
 private:
 	fz_context* mupdf_context = nullptr;
-	sqlite3* db = nullptr;
+	DatabaseManager* db_manager = nullptr;
 	DocumentManager* document_manager = nullptr;
 	CommandManager command_manager;
 	ConfigManager* config_manager = nullptr;
@@ -152,7 +152,7 @@ public:
 
 	MainWidget(
 		fz_context* mupdf_context,
-		sqlite3* db,
+		DatabaseManager* db_manager,
 		DocumentManager* document_manager,
 		ConfigManager* config_manager,
 		InputHandler* input_handler,
@@ -164,6 +164,7 @@ public:
 	~MainWidget();
 
 	void open_document(const Path& path, std::optional<float> offset_x = {}, std::optional<float> offset_y = {}, std::optional<float> zoom_level = {});
+	void open_document_with_hash(const std::string& hash, std::optional<float> offset_x = {}, std::optional<float> offset_y = {}, std::optional<float> zoom_level = {});
 	void open_document_at_location(const Path& path, int page, std::optional<float> x_loc, std::optional<float> y_loc, std::optional<float> zoom_level);
 	void open_document(const DocumentViewState& state);
 	void open_document(const LinkViewState& checksum);
