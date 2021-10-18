@@ -53,12 +53,14 @@ CommandManager::CommandManager() {
 	commands.push_back({ "goto_link", false, false , false, false});
 	commands.push_back({ "edit_link", false, false , false, false});
 	commands.push_back({ "open_prev_doc", false, false , false, false});
+	commands.push_back({ "open_document_embedded", false, false , false, false});
 	commands.push_back({ "copy", false, false , false, false});
 	commands.push_back({ "toggle_fullscreen", false, false , false, false});
 	commands.push_back({ "toggle_one_window", false, false , false, false});
 	commands.push_back({ "toggle_highlight", false, false , false, false});
 	commands.push_back({ "toggle_synctex", false, false , false, false});
-	commands.push_back({ "command", true, false , false, false});
+	//commands.push_back({ "command", true, false , false, false});
+	commands.push_back({ "command", false, false , false, false});
 	commands.push_back({ "search_selected_text_in_google_scholar", false, false , false, false});
 	commands.push_back({ "open_selected_url", false, false , false, false});
 	commands.push_back({ "search_selected_text_in_libgen", false, false , false, false});
@@ -67,9 +69,21 @@ CommandManager::CommandManager() {
 	commands.push_back({ "next_chapter", false, false , false, true});
 	commands.push_back({ "prev_chapter", false, false , false, true});
 	commands.push_back({ "toggle_dark_mode", false, false , false, false});
+	commands.push_back({ "toggle_presentation_mode", false, false , false, false});
 	commands.push_back({ "toggle_mouse_drag_mode", false, false , false, false});
 	commands.push_back({ "quit", false, false , false, false});
+	commands.push_back({ "q", false, false , false, false});
 	commands.push_back({ "open_link", true, false , false, false});
+	commands.push_back({ "keys", false, false , false, false});
+	commands.push_back({ "keys_user", false, false , false, false});
+	commands.push_back({ "prefs", false, false , false, false});
+	commands.push_back({ "prefs_user", false, false , false, false});
+	commands.push_back({ "import", false, false , false, false});
+	commands.push_back({ "export", false, false , false, false});
+	commands.push_back({ "move_visual_mark_down", false, false , false, false});
+	commands.push_back({ "move_visual_mark_up", false, false , false, false});
+	commands.push_back({ "set_page_offset", true, false , false, false});
+	commands.push_back({ "toggle_visual_scroll", false, false , false, false});
 }
 
 const Command* CommandManager::get_command_with_name(std::string name) {
@@ -79,6 +93,14 @@ const Command* CommandManager::get_command_with_name(std::string name) {
 		}
 	}
 	return nullptr;
+}
+
+QStringList CommandManager::get_all_command_names() {
+	QStringList res;
+	for (const auto &com : commands) {
+		res.push_back(QString::fromStdString(com.name));
+	}
+	return res;
 }
 
 void print_tree_node(InputParseTreeNode node) {
@@ -97,6 +119,10 @@ void print_tree_node(InputParseTreeNode node) {
 
 	if (node.shift_modifier) {
 		std::wcout << "Shift+";
+	}
+
+	if (node.alt_modifier) {
+		std::wcout << "Alt+";
 	}
 	std::wcout << node.command << std::endl;
 }
@@ -123,6 +149,10 @@ InputParseTreeNode parse_token(std::string token) {
 
 		if (subcommands[i] == "S") {
 			res.shift_modifier = true;
+		}
+
+		if (subcommands[i] == "A") {
+			res.alt_modifier = true;
 		}
 	}
 
@@ -334,7 +364,7 @@ bool is_digit(int key) {
 	return key >= Qt::Key::Key_0 && key <= Qt::Key::Key_9;
 }
 
-const Command* InputHandler::handle_key(int key, bool shift_pressed, bool control_pressed, int* num_repeats) {
+const Command* InputHandler::handle_key(int key, bool shift_pressed, bool control_pressed, bool alt_pressed, int* num_repeats) {
 	if (key >= 'A' && key <= 'Z') {
 		key = key - 'A' + 'a';
 	}
@@ -346,7 +376,7 @@ const Command* InputHandler::handle_key(int key, bool shift_pressed, bool contro
 
 	for (InputParseTreeNode* child : current_node->children) {
 		//if (child->command == key && child->shift_modifier == shift_pressed && child->control_modifier == control_pressed){
-		if (child->matches(key, shift_pressed, control_pressed)){
+		if (child->matches(key, shift_pressed, control_pressed, alt_pressed)){
 			if (child->is_final == true) {
 				current_node = root;
 				//cout << child->name << endl;
@@ -392,13 +422,14 @@ bool InputParseTreeNode::is_same(const InputParseTreeNode* other) {
 	return (command == other->command) &&
 		(shift_modifier == other->shift_modifier) &&
 		(control_modifier == other->control_modifier) &&
+		(alt_modifier == other->alt_modifier) &&
 		(requires_symbol == other->requires_symbol) &&
 		(requires_text == other->requires_text);
 }
 
-bool InputParseTreeNode::matches(int key, bool shift, bool ctrl)
+bool InputParseTreeNode::matches(int key, bool shift, bool ctrl, bool alt)
 {
-	return (key == this->command) && (shift == this->shift_modifier) && (ctrl == this->control_modifier);
+	return (key == this->command) && (shift == this->shift_modifier) && (ctrl == this->control_modifier) && (alt == this->alt_modifier);
 }
 
 std::optional<Path> InputHandler::get_or_create_user_keys_path() {
@@ -411,6 +442,90 @@ std::optional<Path> InputHandler::get_or_create_user_keys_path() {
 			return user_key_paths[i];
 		}
 	}
+	user_key_paths.back().file_parent().create_directories();
 	create_file_if_not_exists(user_key_paths.back().get_path());
 	return user_key_paths.back();
+}
+
+std::unordered_map<std::string, std::vector<std::string>> InputHandler::get_command_key_mappings() const{
+	std::unordered_map<std::string, std::vector<std::string>> res;
+	std::vector<InputParseTreeNode*> prefix;
+	add_command_key_mappings(root, res, prefix);
+	return res;
+}
+
+void InputHandler::add_command_key_mappings(InputParseTreeNode* thisroot,
+	std::unordered_map<std::string, std::vector<std::string>>& map,
+	std::vector<InputParseTreeNode*> prefix) const {
+
+	if (thisroot->is_final) {
+		map[thisroot->name].push_back(get_key_string_from_tree_node_sequence(prefix));
+	}
+	else{
+		for (int i = 0; i < thisroot->children.size(); i++) {
+			prefix.push_back(thisroot->children[i]);
+			add_command_key_mappings(thisroot->children[i], map, prefix);
+			prefix.pop_back();
+		}
+
+	}
+}
+
+std::string InputHandler::get_key_name_from_key_code(int key_code) const{
+	std::string result;
+	std::map<int, std::string> keymap = {
+		{Qt::Key::Key_Up, "up"},
+		{Qt::Key::Key_Down, "down"},
+		{Qt::Key::Key_Left, "left"},
+		{Qt::Key::Key_Right, "right"},
+		{Qt::Key::Key_Backspace, "backspace"},
+		{Qt::Key::Key_Space, "space"},
+		{Qt::Key::Key_PageUp, "pageup"},
+		{Qt::Key::Key_PageDown, "pagedown"},
+		{Qt::Key::Key_Home, "home"},
+		{Qt::Key::Key_End, "end"},
+		{Qt::Key::Key_End, "pagedown"},
+		{Qt::Key::Key_Tab, "tab"},
+	};
+
+	//if (((key_code <= 'z') && (key_code >= 'a')) || ((key_code <= 'Z') && (key_code >= 'A'))) {
+	if (key_code < 127) {
+		result.push_back(key_code);
+		return result;
+	}
+	else if (keymap.find(key_code) != keymap.end()) {
+		return "<" + keymap[key_code] + ">";
+	}
+	else if ((key_code >= Qt::Key::Key_F1) && (key_code <= Qt::Key::Key_F35)) {
+		int f_number = 1 + (key_code - Qt::Key::Key_F1);
+		return "<f" + QString::number(f_number).toStdString() + ">";
+	}
+	else {
+		return "UNK";
+	}
+}
+
+std::string InputHandler::get_key_string_from_tree_node_sequence(const std::vector<InputParseTreeNode*> seq) const{
+	std::string res;
+	for (int i = 0; i < seq.size(); i++) {
+		if (seq[i]->alt_modifier || seq[i]->shift_modifier || seq[i]->control_modifier ) {
+			res += "<";
+		}
+		std::string current_key_command_name = get_key_name_from_key_code(seq[i]->command);
+
+		if (seq[i]->alt_modifier) {
+			res += "A-";
+		}
+		if (seq[i]->control_modifier) {
+			res += "C-";
+		}
+		if (seq[i]->shift_modifier) {
+			res += "S-";
+		}
+		res += current_key_command_name;
+		if (seq[i]->alt_modifier || seq[i]->shift_modifier || seq[i]->control_modifier ) {
+			res += ">";
+		}
+	}
+	return res;
 }

@@ -51,10 +51,14 @@
 #endif
 
 extern bool SHOULD_USE_MULTIPLE_MONITORS;
+extern bool SORT_BOOKMARKS_BY_LOCATION;
 extern bool FLAT_TABLE_OF_CONTENTS;
+extern bool HOVER_OVERVIEW;
 extern float MOVE_SCREEN_PERCENTAGE;
 extern std::wstring LIBGEN_ADDRESS;
 extern std::wstring INVERSE_SEARCH_COMMAND;
+extern float VISUAL_MARK_NEXT_PAGE_FRACTION;
+extern float VISUAL_MARK_NEXT_PAGE_THRESHOLD;
 
 extern Path default_config_path;
 extern Path default_keys_path;
@@ -63,6 +67,7 @@ extern std::vector<Path> user_keys_paths;
 extern Path database_file_path;
 extern Path tutorial_path;
 extern Path last_opened_file_address_path;
+extern std::wstring ITEM_LIST_PREFIX;
 
 
 bool MainWidget::main_document_view_has_document()
@@ -109,12 +114,29 @@ void MainWidget::mouseMoveEvent(QMouseEvent* mouse_event) {
 	int x = mouse_event->pos().x();
 	int y = mouse_event->pos().y();
 
-	if (main_document_view && main_document_view->get_link_in_pos(x, y)) {
+	std::optional<PdfLink> link = {};
+	if (main_document_view && (link = main_document_view->get_link_in_pos(x, y))) {
 		// show hand cursor when hovering over links
 		setCursor(Qt::PointingHandCursor);
+
+		if (HOVER_OVERVIEW) {
+			int page;
+			float offset_x, offset_y;
+			parse_uri(link.value().uri, &page, &offset_x, &offset_y);
+
+			int current_page = main_document_view->get_current_page_number();
+			float page_height = main_document_view->get_document()->get_page_height(current_page);
+
+			opengl_widget->set_overview_page(OverviewState{ page - 1, offset_y, page_height });
+			invalidate_render();
+		}
 	}
 	else {
 		setCursor(Qt::ArrowCursor);
+		if (HOVER_OVERVIEW) {
+			opengl_widget->set_overview_page({});
+			invalidate_render();
+		}
 	}
 
 	if (is_dragging) {
@@ -153,7 +175,7 @@ void MainWidget::mouseMoveEvent(QMouseEvent* mouse_event) {
 
 }
 
-void MainWidget::closeEvent(QCloseEvent* close_event) {
+void MainWidget::persist() {
 	main_document_view->persist();
 
 	// write the address of the current document in a file so that the next time
@@ -165,6 +187,9 @@ void MainWidget::closeEvent(QCloseEvent* close_event) {
 		last_path_file << encoded_file_name_str.c_str() << std::endl;
 		last_path_file.close();
 	}
+}
+void MainWidget::closeEvent(QCloseEvent* close_event) {
+	persist();
 
 	// we need to delete this here (instead of destructor) to ensure that application
 	// closes immediately after the main window is closed
@@ -237,10 +262,15 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 	text_command_line_edit_container->setLayout(text_command_line_edit_container_layout);
 	text_command_line_edit_container->hide();
 
+	on_command_done = [&](std::string command_name) {
+		const Command* command = command_manager.get_command_with_name(command_name);
+		handle_command_types(command, 1);
+	};
+
 	QObject::connect(text_command_line_edit, &QLineEdit::returnPressed, [&]() {
-		handle_pending_text_command(text_command_line_edit->text().toStdWString());
 		text_command_line_edit_container->hide();
 		setFocus();
+		handle_pending_text_command(text_command_line_edit->text().toStdWString());
 		});
 
 	// when pdf renderer's background threads finish rendering a page or find a new search result
@@ -361,7 +391,14 @@ std::wstring MainWidget::get_status_string() {
 		ss << " [ synctex ]";
 	}
 	if (this->mouse_drag_mode) {
-		ss << " [drag]";
+		ss << " [ drag ]";
+	}
+	if (opengl_widget->is_presentation_mode()) {
+		ss << " [ presentation mode ] ";
+	}
+
+	if (visual_scroll_mode) {
+		ss << " [ visual scroll mode ] ";
 	}
 
 	return ss.str();
@@ -371,7 +408,11 @@ void MainWidget::handle_escape() {
 	text_command_line_edit->setText("");
 	pending_link = {};
 	current_pending_command = nullptr;
-	current_widget = nullptr;
+
+	if (current_widget != nullptr) {
+		delete current_widget;
+		current_widget = nullptr;
+	}
 
 	if (main_document_view) {
 		main_document_view->handle_escape();
@@ -402,6 +443,12 @@ void MainWidget::validate_render() {
 			main_document_view->fit_to_page_width(true);
 			last_smart_fit_page = current_page;
 		}
+	}
+	if (opengl_widget->is_presentation_mode()) {
+		int current_page = main_document_view->get_current_page_number();
+		opengl_widget->set_visible_page_number(current_page);
+		main_document_view->set_offset_y(main_document_view->get_document()->get_accum_page_height(current_page) + main_document_view->get_document()->get_page_height(current_page)/2);
+		main_document_view->fit_to_page_height_width_minimum();
 	}
 
 	if (main_document_view && main_document_view->get_document()) {
@@ -737,9 +784,11 @@ void MainWidget::handle_command_with_symbol(const Command* command, char symbol)
 
 	}
 	else if (command->name == "add_highlight") {
-		main_document_view->add_highlight({ selection_begin_x, selection_begin_y }, { selection_end_x, selection_end_y }, symbol);
-		opengl_widget->selected_character_rects.clear();
-		selected_text.clear();
+		if (opengl_widget->selected_character_rects.size() > 0) {
+			main_document_view->add_highlight({ selection_begin_x, selection_begin_y }, { selection_end_x, selection_end_y }, symbol);
+			opengl_widget->selected_character_rects.clear();
+			selected_text.clear();
+		}
 	}
 	else if (command->name == "goto_mark") {
 		assert(main_document_view);
@@ -881,6 +930,29 @@ bool MainWidget::is_waiting_for_symbol() {
 	return (current_pending_command && current_pending_command->requires_symbol);
 }
 
+void MainWidget::handle_command_types(const Command* command, int num_repeats) {
+
+	if (command == nullptr) return;
+
+	if (command->requires_symbol) {
+		current_pending_command = command;
+		return;
+	}
+	if (command->requires_file_name) {
+		std::wstring file_name = select_document_file_name();
+		if (file_name.size() > 0) {
+			handle_command_with_file_name(command, file_name);
+		}
+		else {
+			std::cerr << "File select failed" << endl;
+		}
+		return;
+	}
+	else {
+		handle_command(command, num_repeats);
+	}
+}
+
 void MainWidget::key_event(bool released, QKeyEvent* kevent) {
 	validate_render();
 
@@ -910,26 +982,11 @@ void MainWidget::key_event(bool released, QKeyEvent* kevent) {
 			kevent->key(),
 			kevent->modifiers() & Qt::ShiftModifier,
 			kevent->modifiers() & Qt::ControlModifier,
+			kevent->modifiers() & Qt::AltModifier,
 			&num_repeats);
 
 		if (command) {
-			if (command->requires_symbol) {
-				current_pending_command = command;
-				return;
-			}
-			if (command->requires_file_name) {
-				std::wstring file_name = select_document_file_name();
-				if (file_name.size() > 0) {
-					handle_command_with_file_name(command, file_name);
-				}
-				else {
-					std::cerr << "File select failed" << endl;
-				}
-				return;
-			}
-			else {
-				handle_command(command, num_repeats);
-			}
+			handle_command_types(command, num_repeats);
 		}
 	}
 
@@ -955,9 +1012,12 @@ void MainWidget::handle_right_click(float x, float y, bool down) {
 				float scale = 0.5f;
 				fz_matrix ctm = fz_scale(scale, scale);
 				fz_pixmap* pixmap = main_document_view->get_document()->get_small_pixmap(page);
+				std::vector<unsigned int> hist = get_max_width_histogram_from_pixmap(pixmap);
+				std::vector<unsigned int> line_locations = get_line_ends_from_histogram(hist);
 				int small_doc_x = static_cast<int>(doc_x * scale);
 				int small_doc_y = static_cast<int>(doc_y * scale);
 				int best_vertical_loc = find_best_vertical_line_location(pixmap, small_doc_x, small_doc_y);
+				//int best_vertical_loc = line_locations[find_nth_larger_element_in_sorted_list(line_locations, static_cast<unsigned int>(small_doc_y), 2)];
 				float best_vertical_loc_doc_pos = best_vertical_loc / scale;
 				int window_x, window_y;
 				main_document_view->document_to_window_pos_in_pixels(page, doc_x, best_vertical_loc_doc_pos, &window_x, &window_y);
@@ -1301,20 +1361,29 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
 	const Command* command = nullptr;
 
 	bool is_control_pressed = QApplication::queryKeyboardModifiers().testFlag(Qt::ControlModifier);
+	bool is_visual_mark_mode = opengl_widget->get_should_draw_vertical_line() && visual_scroll_mode;
 
 	if (!is_control_pressed) {
 		if (wevent->angleDelta().y() > 0) {
-			command = input_handler->handle_key(Qt::Key::Key_Up, false, false, &num_repeats);
+			command = command_manager.get_command_with_name("move_up");
+
+			if (is_visual_mark_mode ) {
+				command = command_manager.get_command_with_name("move_visual_mark_up");
+			}
 		}
 		if (wevent->angleDelta().y() < 0) {
-			command = input_handler->handle_key(Qt::Key::Key_Down, false, false, &num_repeats);
+				command = command_manager.get_command_with_name("move_down");
+
+			if (is_visual_mark_mode) {
+				command = command_manager.get_command_with_name("move_visual_mark_down");
+			}
 		}
 
 		if (wevent->angleDelta().x() > 0) {
-			command = input_handler->handle_key(Qt::Key::Key_Right, false, false, &num_repeats);
+			command = input_handler->handle_key(Qt::Key::Key_Left, false, false, false, &num_repeats);
 		}
 		if (wevent->angleDelta().x() < 0) {
-			command = input_handler->handle_key(Qt::Key::Key_Left, false, false, &num_repeats);
+			command = input_handler->handle_key(Qt::Key::Key_Right, false, false, false, &num_repeats);
 		}
 	}
 
@@ -1381,6 +1450,7 @@ void MainWidget::toggle_two_window_mode() {
 }
 
 void MainWidget::handle_command(const Command* command, int num_repeats) {
+	if (command == nullptr) return;
 
 	if (command->requires_text) {
 		current_pending_command = command;
@@ -1404,7 +1474,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 	}
 	if (command->name == "goto_begining") {
 		if (num_repeats) {
-			main_document_view->goto_page(num_repeats-1);
+			main_document_view->goto_page(num_repeats - 1 + main_document_view->get_page_offset());
 		}
 		else {
 			main_document_view->set_offset_y(0.0f);
@@ -1414,36 +1484,60 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 	if (command->name == "goto_end") {
 		main_document_view->goto_end();
 	}
+
 	if (command->name == "copy") {
 		copy_to_clipboard(selected_text);
 	}
 
 	int rp = std::max(num_repeats, 1);
 
-	if (command->name == "screen_down") {
-		move_document_screens(1 * rp);
+	if (!opengl_widget->is_presentation_mode()) {
+		if (command->name == "screen_down") {
+			move_document_screens(1 * rp);
+		}
+		if (command->name == "screen_up") {
+			move_document_screens(-1 * rp);
+		}
+		if (command->name == "move_down") {
+			move_document(0.0f, 72.0f * rp * VERTICAL_MOVE_AMOUNT);
+		}
+		if (command->name == "move_up") {
+			move_document(0.0f, -72.0f * rp * VERTICAL_MOVE_AMOUNT);
+		}
+
+		if (command->name == "move_right") {
+			main_document_view->move(72.0f * rp * HORIZONTAL_MOVE_AMOUNT, 0.0f);
+			last_smart_fit_page = {};
+		}
+
+		if (command->name == "move_left") {
+			main_document_view->move(-72.0f * rp * HORIZONTAL_MOVE_AMOUNT, 0.0f);
+			last_smart_fit_page = {};
+		}
 	}
-	if (command->name == "screen_up") {
-		move_document_screens(-1 * rp);
-	}
-	if (command->name == "move_down") {
-		move_document(0.0f, 72.0f * rp * VERTICAL_MOVE_AMOUNT);
-	}
-	else if (command->name == "move_up") {
-		move_document(0.0f, -72.0f * rp * VERTICAL_MOVE_AMOUNT);
+	else {
+		if (command->name == "screen_down") {
+			main_document_view->move_pages(1);
+		}
+		if (command->name == "screen_up") {
+			main_document_view->move_pages(-1);
+		}
+		if (command->name == "move_down") {
+			main_document_view->move_pages(1);
+		}
+		if (command->name == "move_up") {
+			main_document_view->move_pages(-1);
+		}
+		if (command->name == "move_left") {
+			main_document_view->move_pages(1);
+		}
+		if (command->name == "move_right") {
+			main_document_view->move_pages(-1);
+		}
 	}
 
-	else if (command->name == "move_right") {
-		main_document_view->move(72.0f * rp * HORIZONTAL_MOVE_AMOUNT, 0.0f);
-		last_smart_fit_page = {};
-	}
 
-	else if (command->name == "move_left") {
-		main_document_view->move(-72.0f * rp * HORIZONTAL_MOVE_AMOUNT, 0.0f);
-		last_smart_fit_page = {};
-	}
-
-	else if (command->name == "link") {
+	if (command->name == "link") {
 		handle_link();
 	}
 
@@ -1522,19 +1616,20 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 				std::vector<std::wstring> flat_toc;
 				std::vector<int> current_document_toc_pages;
 				get_flat_toc(main_document_view->get_document()->get_toc(), flat_toc, current_document_toc_pages);
-				current_widget = std::make_unique<FilteredSelectWindowClass<int>>(flat_toc, current_document_toc_pages, [&](int* page_value) {
+				set_current_widget(new FilteredSelectWindowClass<int>(flat_toc, current_document_toc_pages, [&](int* page_value) {
 					if (page_value) {
 						validate_render();
 						update_history_state();
 						main_document_view->goto_page(*page_value);
 						push_state();
 					}
-					}, config_manager, this);
+					}, config_manager, this));
 				current_widget->show();
 			}
 			else {
 
-				current_widget = std::make_unique<FilteredTreeSelect<int>>(main_document_view->get_document()->get_toc_model(),
+				std::vector<int> selected_index = main_document_view->get_current_chapter_recursive_index();
+				set_current_widget(new FilteredTreeSelect<int>(main_document_view->get_document()->get_toc_model(),
 					[&](const std::vector<int>& indices) {
 						TocNode* toc_node = get_toc_node_from_indices(main_document_view->get_document()->get_toc(),
 							indices);
@@ -1544,10 +1639,13 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 							main_document_view->goto_page(toc_node->page);
 							push_state();
 						}
-					}, config_manager, this);
+					}, config_manager, this, selected_index));
 				current_widget->show();
 			}
 
+		}
+		else {
+			show_error_message(L"This document doesn't have a table of contents");
 		}
 	}
 	else if (command->name == "open_prev_doc") {
@@ -1573,7 +1671,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 		//}
 
 		if (opened_docs_hashes.size() > 0) {
-			current_widget = std::make_unique<FilteredSelectWindowClass<std::string>>(opened_docs_names,
+			set_current_widget(new FilteredSelectWindowClass<std::string>(opened_docs_names,
 				opened_docs_hashes,
 				[&](std::string* doc_hash) {
 					if (doc_hash->size() > 0) {
@@ -1582,21 +1680,37 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 					}
 				},
 				config_manager,
-				this,
-				[&](std::string* doc_hash) {
+					this,
+					[&](std::string* doc_hash) {
 					db_manager->delete_opened_book(*doc_hash);
-				});
+				}));
 			current_widget->show();
 		}
+	}
+	else if (command->name == "open_document_embedded") {
+		set_current_widget(new FileSelector(
+			[&](std::wstring doc_path) {
+				validate_render();
+				open_document(doc_path);
+			}, this));
+		current_widget->show();
 	}
 	else if (command->name == "goto_bookmark") {
 		std::vector<std::wstring> option_names;
 		std::vector<float> option_locations;
-		for (int i = 0; i < main_document_view->get_document()->get_bookmarks().size(); i++) {
-			option_names.push_back(main_document_view->get_document()->get_bookmarks()[i].description);
-			option_locations.push_back(main_document_view->get_document()->get_bookmarks()[i].y_offset);
+		std::vector<BookMark> bookmarks;
+		if (SORT_BOOKMARKS_BY_LOCATION) {
+			bookmarks = main_document_view->get_document()->get_sorted_bookmarks();
 		}
-		current_widget = std::make_unique<FilteredSelectWindowClass<float>>(
+		else {
+			bookmarks = main_document_view->get_document()->get_bookmarks();
+		}
+
+		for (int i = 0; i < bookmarks.size() ; i++) {
+			option_names.push_back(ITEM_LIST_PREFIX + L" " + bookmarks[i].description);
+			option_locations.push_back(bookmarks[i].y_offset);
+		}
+		set_current_widget(new FilteredSelectWindowClass<float>(
 			option_names,
 			option_locations,
 			[&](float* offset_value) {
@@ -1613,7 +1727,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 				if (offset_value) {
 					main_document_view->delete_closest_bookmark_to_offset(*offset_value);
 				}
-			});
+			}));
 		current_widget->show();
 	}
 	else if (command->name == "goto_highlight") {
@@ -1631,7 +1745,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 			option_locations.push_back({highlights[i].selection_begin.x, highlights[i].selection_begin.y, highlights[i].selection_end.x, highlights[i].selection_end.y});
 		}
 
-		current_widget = std::make_unique<FilteredSelectWindowClass<std::vector<float>>>(
+		set_current_widget(new FilteredSelectWindowClass<std::vector<float>>(
 			option_names,
 			option_locations,
 			[&](std::vector<float>* offset_values) {
@@ -1652,7 +1766,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 					float end_y = (*(offset_values))[3];
 					main_document_view->delete_highlight_with_offsets(begin_x, begin_y, end_x, end_y);
 				}
-			});
+			}));
 		current_widget->show();
 	}
 	else if (command->name == "goto_bookmark_g") {
@@ -1667,11 +1781,11 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 			if (path) {
 				BookMark bm = desc_bm_pair.second;
 				std::wstring file_name = Path(path.value()).filename().value_or(L"");
-				descs.push_back(bm.description + L" {" + file_name + L"}");
+				descs.push_back(ITEM_LIST_PREFIX + L" " + bm.description + L" {" + file_name + L"}");
 				book_states.push_back({ path.value(), bm.y_offset });
 			}
 		}
-		current_widget = std::make_unique<FilteredSelectWindowClass<BookState>>(
+		set_current_widget(new FilteredSelectWindowClass<BookState>(
 			descs,
 			book_states,
 			[&](BookState* book_state) {
@@ -1686,7 +1800,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 				if (book_state) {
 					db_manager->delete_bookmark(checksummer->get_checksum(book_state->document_path), book_state->offset_y);
 				}
-			});
+			}));
 		current_widget->show();
 
 	}
@@ -1712,7 +1826,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 
 			}
 		}
-		current_widget = std::make_unique<FilteredSelectWindowClass<BookState>>(
+		set_current_widget(new FilteredSelectWindowClass<BookState>(
 			descs,
 			book_states,
 			[&](BookState* book_state) {
@@ -1722,13 +1836,19 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 				}
 			},
 			config_manager,
-				this);
+				this));
 		current_widget->show();
 
 	}
 
+	else if (command->name == "toggle_visual_scroll") {
+		toggle_visual_scroll_mode();
+	}
 	else if (command->name == "toggle_fullscreen") {
 		toggle_fullscreen();
+	}
+	else if (command->name == "toggle_presentation_mode") {
+		toggle_presentation_mode();
 	}
 	else if (command->name == "toggle_one_window") {
 		toggle_two_window_mode();
@@ -1778,11 +1898,63 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 	else if (command->name == "toggle_dark_mode") {
 		this->toggle_dark_mode();
 	}
-	else if (command->name == "quit") {
+	else if (command->name == "quit" || command->name == "q") {
+		persist();
 		QApplication::quit();
 	}
+	else if (command->name == "command") {
+		QStringList command_names = command_manager.get_all_command_names();
+	 	set_current_widget(new CommandSelector(
+			&on_command_done, this, command_names, input_handler->get_command_key_mappings()));
+		current_widget->show();
+	}
+	else if (command->name == "keys") {
+		open_file(default_keys_path.get_path());
+	}
+	else if (command->name == "keys_user") {
+		std::optional<Path> key_file_path = input_handler->get_or_create_user_keys_path();
+		if (key_file_path) {
+			open_file(key_file_path.value().get_path());
+		}
+	}
+	else if (command->name == "prefs") {
+		open_file(default_config_path.get_path());
+	}
+	else if (command->name == "prefs_user") {
+		std::optional<Path> pref_file_path = config_manager->get_or_create_user_config_file();
+		if (pref_file_path) {
+			open_file(pref_file_path.value().get_path());
+		}
+	}
+	else if (command->name == "export") {
+		std::wstring export_file_name = select_new_json_file_name();
+		db_manager->export_json(export_file_name, checksummer);
+	}
+	else if (command->name == "import") {
+		std::wstring import_file_name = select_json_file_name();
+		db_manager->import_json(import_file_name, checksummer);
+	}
 	else if (command->name == "debug") {
-
+	}
+	else if (command->name == "move_visual_mark_down") {
+		float fraction = 0.25f;
+		float new_pos = get_ith_next_line_from_absolute_y(main_document_view->get_vertical_line_pos(), 2, true);
+		main_document_view->set_vertical_line_pos(new_pos);
+		if (focus_on_visual_mark_pos()) {
+			float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
+			main_document_view->move_absolute(0, distance);
+		}
+		validate_render();
+	}
+	else if (command->name == "move_visual_mark_up") {
+		float fraction = 0.25f;
+		float new_pos = get_ith_next_line_from_absolute_y(main_document_view->get_vertical_line_pos(), 0, true);
+		main_document_view->set_vertical_line_pos(new_pos);
+		if (focus_on_visual_mark_pos()) {
+			float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
+			main_document_view->move_absolute(0, -distance);
+		}
+		validate_render();
 	}
 
 	if (command->pushes_state) {
@@ -1891,7 +2063,14 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
 
 		if (is_string_numeric(text.c_str()) && text.size() < 6) { // make sure the page number is valid
 			int dest = std::stoi(text.c_str()) - 1;
-			main_document_view->goto_page(dest);
+			main_document_view->goto_page(dest + main_document_view->get_page_offset());
+		}
+	}
+
+	if (current_pending_command->name == "set_page_offset") {
+
+		if (is_string_numeric(text.c_str()) && text.size() < 6) { // make sure the page number is valid
+			main_document_view->set_page_offset(std::stoi(text.c_str()));
 		}
 	}
 
@@ -1927,6 +2106,12 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
 			std::wstring import_file_name = select_json_file_name();
 			db_manager->import_json(import_file_name, checksummer);
 		}
+		else{
+			const Command* command = command_manager.get_command_with_name(utf8_encode(text));
+			if (command != nullptr) {
+				handle_command(command, 1);
+			}
+		}
 	}
 }
 
@@ -1938,6 +2123,15 @@ void MainWidget::toggle_fullscreen() {
 	else {
 		helper_opengl_widget->setWindowState(Qt::WindowState::WindowFullScreen);
 		setWindowState(Qt::WindowState::WindowFullScreen);
+	}
+}
+
+void MainWidget::toggle_presentation_mode() {
+	if (opengl_widget->is_presentation_mode()) {
+		opengl_widget->set_visible_page_number({});
+	}
+	else {
+		opengl_widget->set_visible_page_number(main_document_view->get_current_page_number());
 	}
 }
 
@@ -1973,4 +2167,78 @@ void MainWidget::long_jump_to_destination(int page, float offset_x, float offset
 		complete_pending_link(dest_state);
 	}
 	invalidate_render();
+}
+
+void MainWidget::set_current_widget(QWidget* new_widget) {
+	if (current_widget != nullptr) {
+		garbage_widgets.push_back(current_widget);
+	}
+	current_widget = new_widget;
+
+	if (garbage_widgets.size() > 2) {
+		delete garbage_widgets[0];
+		garbage_widgets.erase(garbage_widgets.begin());
+	}
+}
+
+float MainWidget::get_ith_next_line_from_absolute_y(float absolute_y, int i, bool cont) {
+		float doc_x, doc_y;
+		int page;
+		main_document_view->get_document()->absolute_to_page_pos(0, absolute_y, &doc_x, &doc_y, &page);
+
+		float scale = 0.5f;
+		fz_matrix ctm = fz_scale(scale, scale);
+		fz_pixmap* pixmap = main_document_view->get_document()->get_small_pixmap(page);
+		std::vector<unsigned int> hist = get_max_width_histogram_from_pixmap(pixmap);
+		std::vector<unsigned int> line_locations = get_line_ends_from_histogram(hist);
+		int small_doc_x = static_cast<int>(doc_x * scale);
+		int small_doc_y = static_cast<int>(doc_y * scale);
+
+		int index = find_nth_larger_element_in_sorted_list(line_locations, static_cast<unsigned int>(small_doc_y - 0.3f), i);
+
+		if (index > -1) {
+			int best_vertical_loc = line_locations[index];
+			float best_vertical_loc_doc_pos = best_vertical_loc / scale;
+			int window_x, window_y;
+			main_document_view->document_to_window_pos_in_pixels(page, doc_x, best_vertical_loc_doc_pos, &window_x, &window_y);
+			float abs_doc_x, abs_doc_y;
+			main_document_view->window_to_absolute_document_pos(window_x, window_y, &abs_doc_x, &abs_doc_y);
+			return abs_doc_y;
+		}
+		else {
+			if (!cont) return absolute_y;
+
+			int next_page;
+			if (i > 0) {
+				//next_page = main_document_view->get_current_page_number() + 1;
+				next_page = main_document_view->get_document()->get_offset_page_number(absolute_y) + 1;
+				if (next_page < main_document_view->get_document()->num_pages()) {
+					return get_ith_next_line_from_absolute_y(main_document_view->get_document()->get_accum_page_height(next_page) + 0.5, 1, false);
+				}
+			}
+			else {
+				next_page = main_document_view->get_document()->get_offset_page_number(absolute_y);
+				if (next_page > 0) {
+					return get_ith_next_line_from_absolute_y(main_document_view->get_document()->get_accum_page_height(next_page) - 0.5f, -1, false);
+				}
+			}
+			return absolute_y;
+		}
+
+}
+bool MainWidget::focus_on_visual_mark_pos() {
+	float window_x, window_y;
+	float thresh = 1 - VISUAL_MARK_NEXT_PAGE_THRESHOLD;
+	main_document_view->absolute_to_window_pos(0, main_document_view->get_vertical_line_pos(), &window_x, &window_y);
+	if ((window_y < -thresh) || (window_y > thresh)) {
+		main_document_view->goto_vertical_line_pos();
+		//float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION;
+		//main_document_view->move_absolute(0, -distance);
+		return true;
+	}
+	return false;
+}
+
+void MainWidget::toggle_visual_scroll_mode() {
+	visual_scroll_mode = !visual_scroll_mode;
 }

@@ -34,6 +34,8 @@ private:
 	std::vector<std::wstring> flat_toc_names;
 	std::vector<int> flat_toc_pages;
 
+	int page_offset = 0;
+
 
 	// number of pages in the document
 	std::optional<int> cached_num_pages = {};
@@ -88,10 +90,12 @@ public:
 
 	void add_bookmark(const std::wstring& desc, float y_offset);
 	void add_highlight(const std::wstring& desc, const std::vector<fz_rect>& highlight_rects, fz_point selection_begin, fz_point selection_end, char type);
+	void fill_highlight_rects(fz_context* ctx);
 	void count_chapter_pages(std::vector<int> &page_counts);
 	void convert_toc_tree(fz_outline* root, std::vector<TocNode*>& output);
 	void count_chapter_pages_accum(std::vector<int> &page_counts);
 	bool get_is_indexing();
+	fz_stext_page* get_stext_with_page_number(fz_context* ctx, int page_number);
 	fz_stext_page* get_stext_with_page_number(int page_number);
 	void add_link(Link link, bool insert_into_database = true);
 	std::wstring get_path();
@@ -104,6 +108,7 @@ public:
 	void delete_highlight_with_offsets(float begin_x, float begin_y, float end_x, float end_y);
 	void delete_closest_link(float to_offset_y);
 	const std::vector<BookMark>& get_bookmarks() const;
+	std::vector<BookMark> get_sorted_bookmarks() const;
 	const std::vector<Highlight>& get_highlights() const;
 	const std::vector<Highlight> get_highlights_sorted() const;
 	fz_link* get_page_links(int page_number);
@@ -153,9 +158,17 @@ public:
 
 	void get_text_selection(fz_point selection_begin,
 		fz_point selection_end,
+		bool is_word_selection, // when in word select mode, we select entire words even if the range only partially includes the word
+		std::vector<fz_rect>& selected_characters,
+		std::wstring& selected_text);
+	void get_text_selection(fz_context* ctx, fz_point selection_begin,
+		fz_point selection_end,
 		bool is_word_selection,
 		std::vector<fz_rect>& selected_characters,
 		std::wstring& selected_text);
+
+	int get_page_offset();
+	void set_page_offset(int new_offset);
 
 	friend class DocumentManager;
 };

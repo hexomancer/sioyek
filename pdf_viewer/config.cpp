@@ -13,15 +13,22 @@ extern float DARK_MODE_BACKGROUND_COLOR[3];
 extern float DARK_MODE_CONTRAST;
 extern bool FLAT_TABLE_OF_CONTENTS;
 extern bool SHOULD_USE_MULTIPLE_MONITORS;
+extern bool SORT_BOOKMARKS_BY_LOCATION;
 extern bool SHOULD_LOAD_TUTORIAL_WHEN_NO_OTHER_FILE;
 extern bool SHOULD_LAUNCH_NEW_INSTANCE;
 extern bool SHOULD_CHECK_FOR_LATEST_VERSION_ON_STARTUP;
 extern bool SHOULD_DRAW_UNRENDERED_PAGES;
+extern bool HOVER_OVERVIEW;
+extern bool DEFAULT_DARK_MODE;
 extern float HIGHLIGHT_COLORS[26 * 3];
 extern std::wstring LIBGEN_ADDRESS;
 extern std::wstring GOOGLE_SCHOLAR_ADDRESS;
 extern std::wstring INVERSE_SEARCH_COMMAND;
 extern std::wstring SHARED_DATABASE_PATH;
+extern std::wstring ITEM_LIST_PREFIX;
+extern float VISUAL_MARK_NEXT_PAGE_FRACTION;
+extern float VISUAL_MARK_NEXT_PAGE_THRESHOLD;
+extern std::wstring UI_FONT_FACE_NAME;
 
 template<typename T>
 void* generic_deserializer(std::wstringstream& stream, void* res_) {
@@ -114,7 +121,9 @@ ConfigManager::ConfigManager(const Path& default_path, const std::vector<Path>& 
 	configs.push_back({ L"background_color", BACKGROUND_COLOR, vec3_serializer, vec3_deserializer });
 	configs.push_back({ L"dark_mode_background_color", DARK_MODE_BACKGROUND_COLOR, vec3_serializer, vec3_deserializer });
 	configs.push_back({ L"dark_mode_contrast", &DARK_MODE_CONTRAST, float_serializer, float_deserializer });
+	configs.push_back({ L"default_dark_mode", &DEFAULT_DARK_MODE, bool_serializer, bool_deserializer });
 	configs.push_back({ L"google_scholar_address", &GOOGLE_SCHOLAR_ADDRESS, string_serializer, string_deserializer });
+	configs.push_back({ L"item_list_prefix", &ITEM_LIST_PREFIX, string_serializer, string_deserializer });
 	configs.push_back({ L"inverse_search_command", &INVERSE_SEARCH_COMMAND, string_serializer, string_deserializer });
 	configs.push_back({ L"libgen_address", &LIBGEN_ADDRESS, string_serializer, string_deserializer });
 	configs.push_back({ L"zoom_inc_factor", &ZOOM_INC_FACTOR, float_serializer, float_deserializer });
@@ -127,7 +136,12 @@ ConfigManager::ConfigManager(const Path& default_path, const std::vector<Path>& 
 	configs.push_back({ L"should_launch_new_instance", &SHOULD_LAUNCH_NEW_INSTANCE, bool_serializer, bool_deserializer });
 	configs.push_back({ L"should_draw_unrendered_pages", &SHOULD_DRAW_UNRENDERED_PAGES, bool_serializer, bool_deserializer });
 	configs.push_back({ L"check_for_updates_on_startup", &SHOULD_CHECK_FOR_LATEST_VERSION_ON_STARTUP, bool_serializer, bool_deserializer });
+	configs.push_back({ L"sort_bookmarks_by_location", &SORT_BOOKMARKS_BY_LOCATION, bool_serializer, bool_deserializer });
 	configs.push_back({ L"shared_database_path", &SHARED_DATABASE_PATH, string_serializer, string_deserializer });
+	configs.push_back({ L"hover_overview", &HOVER_OVERVIEW, bool_serializer, bool_deserializer });
+	configs.push_back({ L"visual_mark_next_page_fraction", &VISUAL_MARK_NEXT_PAGE_FRACTION, float_serializer, float_deserializer });
+	configs.push_back({ L"visual_mark_next_page_threshold", &VISUAL_MARK_NEXT_PAGE_THRESHOLD, float_serializer, float_deserializer });
+	configs.push_back({ L"ui_font", &UI_FONT_FACE_NAME, string_serializer, string_deserializer });
 
 	std::wstring highlight_config_string = L"highlight_color_a";
 	for (char highlight_type = 'a'; highlight_type <= 'z'; highlight_type++) {
@@ -149,17 +163,14 @@ ConfigManager::ConfigManager(const Path& default_path, const std::vector<Path>& 
 //	}
 //}
 
-void ConfigManager::deserialize(const Path& default_file_path, const std::vector<Path>& user_file_paths) {
-	//std::string default_path_utf8 = default_path.get_path_utf8();
-	//std::string user_path_utf8 = utf8_encode(user_path);
-
-	//std::wifstream default_infile(default_path_utf8);
-	//std::wifstream user_infile(user_path_utf8);
-
+void ConfigManager::deserialize_file(const Path& file_path) {
 
 	std::wstring line;
-	std::wifstream default_file(default_file_path.get_path_utf8());
-	while (std::getline(default_file, line)) {
+	std::string encoded_line;
+	std::ifstream default_file(file_path.get_path_utf8());
+	while (std::getline(default_file, encoded_line)) {
+
+		line = utf8_decode(encoded_line);
 
 		if (line.size() == 0 || line[0] == '#') {
 			continue;
@@ -174,29 +185,14 @@ void ConfigManager::deserialize(const Path& default_file_path, const std::vector
 		}
 	}
 	default_file.close();
+}
 
-	for (int i = 0; i < user_file_paths.size(); i++) {
+void ConfigManager::deserialize(const Path& default_file_path, const std::vector<Path>& user_file_paths) {
 
-		if (user_file_paths[i].file_exists()) {
-			std::wifstream user_file(user_file_paths[i].get_path_utf8());
-			while (std::getline(user_file, line)) {
+	deserialize_file(default_file_path);
 
-				if (line.size() == 0 || line[0] == '#') {
-					continue;
-				}
-
-				std::wstringstream ss{ line };
-				std::wstring conf_name;
-				ss >> conf_name;
-				Config* conf = get_mut_config_with_name(conf_name);
-				if (conf) {
-					conf->value = conf->deserialize(ss, conf->value);
-				}
-			}
-			user_file.close();
-
-		}
-
+	for (const auto& user_file_path : user_file_paths) {
+		deserialize_file(user_file_path);
 	}
 }
 
@@ -210,6 +206,7 @@ std::optional<Path> ConfigManager::get_or_create_user_config_file() {
 			return user_config_paths[i];
 		}
 	}
+	user_config_paths.back().file_parent().create_directories();
 	create_file_if_not_exists(user_config_paths.back().get_path());
 	return user_config_paths.back();
 }

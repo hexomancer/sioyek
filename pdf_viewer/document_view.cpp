@@ -368,7 +368,7 @@ void DocumentView::goto_mark(char symbol) {
 void DocumentView::goto_end() {
 	if (current_document) {
 		int last_page_index = current_document->num_pages() - 1;
-		set_offset_y(current_document->get_accum_page_height(last_page_index));
+		set_offset_y(current_document->get_accum_page_height(last_page_index) + current_document->get_page_height(last_page_index));
 	}
 }
 float DocumentView::set_zoom_level(float zl) {
@@ -607,6 +607,22 @@ void DocumentView::fit_to_page_width(bool smart)
 
 }
 
+void DocumentView::fit_to_page_height_width_minimum()
+{
+	int cp = get_current_page_number();
+	if (cp == -1) return;
+
+	int page_width = current_document->get_page_width(cp);
+	int page_height = current_document->get_page_height(cp);
+
+	float x_zoom_level = static_cast<float>(view_width) / page_width;
+	float y_zoom_level = static_cast<float>(view_height) / page_height;
+
+	set_offset_x(0);
+	set_zoom_level(std::min(x_zoom_level, y_zoom_level));
+
+}
+
 void DocumentView::persist() {
 	if (!current_document) return;
 	db_manager->update_book(current_document->get_checksum(), zoom_level, offset_x, offset_y);
@@ -660,6 +676,33 @@ std::optional<std::pair<int, int>> DocumentView::get_current_page_range()
 	}
 
 	return std::make_pair(range_begin, range_end);
+}
+
+void DocumentView::get_page_chapter_index(int page, std::vector<TocNode*> nodes, std::vector<int>& res) {
+
+
+	for (int i = 0; i < nodes.size(); i++) {
+		if ((i == nodes.size() - 1) && (nodes[i]->page <= page)) {
+			res.push_back(i);
+			get_page_chapter_index(page, nodes[i]->children, res);
+			return;
+		}
+		else {
+			if ((nodes[i]->page <= page) && (nodes[i + 1]->page > page)) {
+				res.push_back(i);
+				get_page_chapter_index(page, nodes[i]->children, res);
+				return;
+			}
+		}
+	}
+
+}
+std::vector<int> DocumentView::get_current_chapter_recursive_index() {
+	int curr_page = get_current_page_number();
+	std::vector<TocNode*> nodes = current_document->get_toc();
+	std::vector<int> res;
+	get_page_chapter_index(curr_page, nodes, res);
+	return res;
 }
 
 void DocumentView::goto_chapter(int diff)
@@ -726,4 +769,12 @@ void DocumentView::get_text_selection(fz_point selection_begin,
 		current_document->get_text_selection(selection_begin, selection_end, is_word_selection, selected_characters, selected_text);
 	}
 
+}
+
+int DocumentView::get_page_offset() {
+	return current_document->get_page_offset();
+}
+
+void DocumentView::set_page_offset(int new_offset) {
+	current_document->set_page_offset(new_offset);
 }

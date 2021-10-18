@@ -48,8 +48,10 @@ private:
 	DocumentView* helper_document_view = nullptr;
 
 	// current widget responsible for selecting an option (for example toc or bookmarks)
-	std::unique_ptr<QWidget> current_widget = nullptr;
+	QWidget* current_widget = nullptr;
+	std::vector<QWidget*> garbage_widgets;
 
+	std::function<void(std::string)> on_command_done = nullptr;
 	std::vector<DocumentViewState> history;
 	int current_history_index = -1;
 
@@ -67,6 +69,9 @@ private:
 	float selection_begin_y = 0;
 	float selection_end_x = 0;
 	float selection_end_y = 0;
+
+	// when set, mouse wheel moves the visual mark
+	bool visual_scroll_mode = false;
 
 	// is the user currently selecing text? (happens when we left click and move the cursor)
 	bool is_selecting = false;
@@ -110,6 +115,7 @@ protected:
 	void resizeEvent(QResizeEvent* resize_event) override;
 	void mouseMoveEvent(QMouseEvent* mouse_event) override;
 	void closeEvent(QCloseEvent* close_event) override;
+	void persist() ;
 	bool is_pending_link_source_filled();
 	std::wstring get_status_string();
 	void handle_escape();
@@ -141,9 +147,11 @@ protected:
 	void show_textbar(const std::wstring& command_name, bool should_fill_with_selected_text = false);
 	void toggle_two_window_mode();
 	void handle_command(const Command* command, int num_repeats);
+	void handle_command_types(const Command* command, int num_repeats);
 	void handle_link();
 	void handle_pending_text_command(std::wstring text);
 	void toggle_fullscreen();
+	void toggle_presentation_mode();
 	void complete_pending_link(const LinkViewState& destination_view_state);
 	void long_jump_to_destination(int page, float offset_x, float offset_y);
 	void long_jump_to_destination(int page, float offset_y);
@@ -181,4 +189,8 @@ public:
 	void handle_args(const QStringList &arguments);
 	void update_link_with_opened_book_state(Link lnk, const OpenedBookState& new_state);
 	void update_closest_link_with_opened_book_state(const OpenedBookState& new_state);
+	void set_current_widget(QWidget* new_widget);
+	float get_ith_next_line_from_absolute_y(float absolute_y, int i, bool cont);
+	bool focus_on_visual_mark_pos();
+	void toggle_visual_scroll_mode();
 };

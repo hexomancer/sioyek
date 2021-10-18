@@ -4,7 +4,9 @@
 #include <iostream>
 #include <functional>
 #include <optional>
+#include <unordered_map>
 
+#include <qsizepolicy.h>
 #include <qapplication.h>
 #include <qpushbutton.h>
 #include <qopenglwidget.h>
@@ -23,15 +25,19 @@
 #include <qstackedwidget.h>
 #include <qboxlayout.h>
 #include <qlistview.h>
+#include <qtableview.h>
 #include <qstringlistmodel.h>
 #include <qpalette.h>
 #include <qstandarditemmodel.h>
+#include <qfilesystemmodel.h>
+#include <qheaderview.h>
 
 
 //#include <Windows.h>
 #include "utils.h"
 #include "config.h"
 
+extern std::wstring UI_FONT_FACE_NAME;
 const int max_select_size = 100;
 
 class HierarchialSortFilterProxyModel : public QSortFilterProxyModel {
@@ -89,6 +95,16 @@ protected:
 					//QCoreApplication::postEvent(tree_view, key_event);
 					return true;
 				}
+				if (key_event->key() == Qt::Key_Tab) {
+					QKeyEvent* new_key_event = new QKeyEvent(key_event->type(), Qt::Key_Down, key_event->modifiers());
+					QCoreApplication::postEvent(tree_view, new_key_event);
+					return true;
+				}
+				if (key_event->key() == Qt::Key_Backtab) {
+					QKeyEvent* new_key_event = new QKeyEvent(key_event->type(), Qt::Key_Up, key_event->modifiers());
+					QCoreApplication::postEvent(tree_view, new_key_event);
+					return true;
+				}
 				if (key_event->key() == Qt::Key_Return || key_event->key() == Qt::Key_Enter) {
 					std::optional<QModelIndex> selected_index = get_selected_index();
 					if (selected_index) {
@@ -109,7 +125,11 @@ public:
 	}
 
 	//todo: check for memory leaks
-	FilteredTreeSelect(QStandardItemModel* item_model, std::function<void(const std::vector<int>&)> on_done, ConfigManager* config_manager, QWidget* parent ) : 
+	FilteredTreeSelect(QStandardItemModel* item_model,
+		std::function<void(const std::vector<int>&)> on_done,
+		ConfigManager* config_manager,
+		QWidget* parent,
+		std::vector<int> selected_index) : 
 		QWidget(parent) ,
 		tree_item_model(item_model),
 		config_manager(config_manager),
@@ -132,11 +152,20 @@ public:
 		tree_view->setEditTriggers(QAbstractItemView::NoEditTriggers);
 		tree_view->expandAll();
 		tree_view->setHeaderHidden(true);
+		tree_view->resizeColumnToContents(0);
+
+		auto index = QModelIndex();
+		for (auto i : selected_index) {
+			index = proxy_model->index(i, 0, index);
+		}
+
+		tree_view->setCurrentIndex(index);
+
 		layout->addWidget(line_edit);
 		layout->addWidget(tree_view);
 
-		line_edit->setFont(QFont("Monaco"));
-		tree_view->setFont(QFont("Monaco"));
+		line_edit->setFont(QFont(QString::fromStdWString(UI_FONT_FACE_NAME)));
+		tree_view->setFont(QFont(QString::fromStdWString(UI_FONT_FACE_NAME)));
 
 		line_edit->installEventFilter(this);
 		line_edit->setFocus();
@@ -152,8 +181,8 @@ public:
 			tree_view->expandAll();
 			});
 
-		setStyleSheet("background-color: black; color: white; border: 0;");
-		tree_view->setStyleSheet("QTreeView::item::selected{background-color: white; color: black;}");
+		//setStyleSheet("background-color: black; color: white; border: 0; QScrollBar::vertical{background: red;}");
+		//tree_view->setStyleSheet("QTreeView::item::selected{background-color: white; color: black;}");
 
 	}
 
@@ -221,6 +250,17 @@ protected:
 					QCoreApplication::postEvent(list_view, new_key_event);
 					return true;
 				}
+				if (key_event->key() == Qt::Key_Tab) {
+					QKeyEvent* new_key_event = new QKeyEvent(key_event->type(), Qt::Key_Down, key_event->modifiers());
+					QCoreApplication::postEvent(list_view, new_key_event);
+					return true;
+				}
+				if (key_event->key() == Qt::Key_Backtab) {
+					QKeyEvent* new_key_event = new QKeyEvent(key_event->type(), Qt::Key_Up, key_event->modifiers());
+					QCoreApplication::postEvent(list_view, new_key_event);
+					return true;
+				}
+
 				if (key_event->key() == Qt::Key_Enter || key_event->key() == Qt::Key_Return) {
 					//QModelIndexList selected_index_list = list_view->selectionModel()->selectedIndexes();
 					//if (selected_index_list.size() > 0) {
@@ -289,8 +329,8 @@ public:
 		layout->addWidget(line_edit);
 		layout->addWidget(list_view);
 
-		line_edit->setFont(QFont("Monaco"));
-		list_view->setFont(QFont("Monaco"));
+		line_edit->setFont(QFont(QString::fromStdWString(UI_FONT_FACE_NAME)));
+		list_view->setFont(QFont(QString::fromStdWString(UI_FONT_FACE_NAME)));
 
 		//line_edit->setStyleSheet("background-color: yellow;");
 		//setStyleSheet("background-color: black;color: white; border: 0;");
@@ -366,6 +406,330 @@ public:
 	}
 };
 
+class CommandSelector : public QWidget{
+private:
+
+	QLineEdit* line_edit = nullptr;
+	QTableView* table_view = nullptr;
+	QStringList string_elements;
+	//QStringListModel* list_model = nullptr;
+	QStandardItemModel* standard_item_model = nullptr;
+	std::unordered_map<std::string, std::vector<std::string>> key_map;
+	std::function<void(std::string)>* on_done = nullptr;
+
+	QList<QStandardItem*> get_item(std::string command_name) {
+
+		std::string command_key = "";
+
+		if (key_map.find(command_name) != key_map.end()) {
+			const std::vector<std::string>& command_keys = key_map[command_name];
+			for (int i = 0; i < command_keys.size(); i++) {
+				const std::string& ck = command_keys[i];
+				if (i > 0) {
+					command_key += " | ";
+				}
+				command_key += ck;
+			}
+
+		}
+		QStandardItem* name_item = new QStandardItem(QString::fromStdString(command_name));
+		QStandardItem* key_item = new QStandardItem(QString::fromStdString(command_key));
+		key_item->setTextAlignment(Qt::AlignVCenter | Qt::AlignRight);
+		return (QList<QStandardItem*>() << name_item << key_item);
+	}
+
+	QStandardItemModel* get_standard_item_model(std::vector<std::string> command_names) {
+
+		QStandardItemModel* res = new QStandardItemModel();
+
+		for (int i = 0; i < command_names.size(); i++) {
+			res->appendRow(get_item(command_names[i]));
+		}
+		return res;
+	}
+
+	QStandardItemModel* get_standard_item_model(QStringList command_names) {
+
+		std::vector<std::string> std_command_names;
+
+		for (int i = 0; i < command_names.size(); i++) {
+			std_command_names.push_back(command_names.at(i).toStdString());
+		}
+		return get_standard_item_model(std_command_names);
+	}
+
+protected:
+	std::optional<QModelIndex> get_selected_index() {
+		QModelIndexList selected_index_list = table_view->selectionModel()->selectedIndexes();
+
+		if (selected_index_list.size() > 0) {
+			QModelIndex selected_index = selected_index_list.at(0);
+			return selected_index;
+		}
+		return {};
+	}
+
+	bool eventFilter(QObject* obj, QEvent* event) override {
+		if (obj == line_edit) {
+			if (event->type() == QEvent::KeyPress) {
+				QKeyEvent* key_event = static_cast<QKeyEvent*>(event);
+				if (key_event->key() == Qt::Key_Down || key_event->key() == Qt::Key_Up) {
+					QKeyEvent* new_key_event = new QKeyEvent(*key_event);
+					QCoreApplication::postEvent(table_view, new_key_event);
+					return true;
+				}
+				if (key_event->key() == Qt::Key_Tab) {
+					QKeyEvent* new_key_event = new QKeyEvent(key_event->type(), Qt::Key_Down, key_event->modifiers());
+					QCoreApplication::postEvent(table_view, new_key_event);
+					return true;
+				}
+				if (key_event->key() == Qt::Key_Backtab) {
+					QKeyEvent* new_key_event = new QKeyEvent(key_event->type(), Qt::Key_Up, key_event->modifiers());
+					QCoreApplication::postEvent(table_view, new_key_event);
+					return true;
+				}
+
+				if (key_event->key() == Qt::Key_Enter || key_event->key() == Qt::Key_Return) {
+					std::optional<QModelIndex> selected_index = get_selected_index();
+					if (selected_index) {
+						on_select(selected_index.value());
+					}
+					else {
+						hide();
+						parentWidget()->setFocus();
+						(*on_done)(line_edit->text().toStdString());
+					}
+				}
+
+			}
+		}
+		return false;
+	}
+
+public:
+
+	void on_config_file_changed() {
+		setStyleSheet("background-color: black; color: white; border: 0;");
+		table_view->setStyleSheet("QTableView::item::selected{background-color: white; color: black;}");
+		//myTable->setStyleSheet("QHeaderView {background-color: transparent;}");
+		table_view->horizontalHeader()->setStretchLastSection(true);
+		table_view->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+		table_view->horizontalHeader()->hide();
+		table_view->verticalHeader()->hide();
+
+	}
+
+	CommandSelector(std::function<void(std::string)>* on_done, QWidget* parent, QStringList elements, std::unordered_map<std::string, std::vector<std::string>> key_map) :
+		QWidget(parent) ,
+		on_done(on_done),
+		key_map(key_map)
+	{
+		resize(300, 800);
+		QVBoxLayout* layout = new QVBoxLayout;
+		setLayout(layout);
+
+		string_elements = elements;
+		//list_model = new QStringListModel(string_elements);
+		standard_item_model = get_standard_item_model(string_elements);
+
+		line_edit = new QLineEdit;
+		table_view = new QTableView;
+		table_view->setEditTriggers(QAbstractItemView::NoEditTriggers);
+		table_view->setModel(standard_item_model);
+		layout->addWidget(line_edit);
+		layout->addWidget(table_view);
+
+		line_edit->installEventFilter(this);
+		line_edit->setFocus();
+
+		QObject::connect(table_view, &QAbstractItemView::activated, [&](const QModelIndex& index) {
+			on_select(index);
+			});
+
+
+		QObject::connect(line_edit, &QLineEdit::textChanged, [&](const QString& text) {
+
+			std::vector<std::string> matching_element_names;
+
+			for (int i = 0; i < string_elements.size(); i++) {
+				if (string_elements.at(i).startsWith(text)) {
+					matching_element_names.push_back(string_elements.at(i).toStdString());
+				}
+			}
+			//QStringListModel* new_standard_item_model = new QStringListModel(matching_elements);
+
+			QStandardItemModel* new_standard_item_model = get_standard_item_model(matching_element_names);
+			table_view->setModel(new_standard_item_model);
+			delete standard_item_model;
+			standard_item_model = new_standard_item_model;
+			});
+
+
+		on_config_file_changed();
+	}
+
+	void resizeEvent(QResizeEvent* resize_event) override {
+		QWidget::resizeEvent(resize_event);
+		int parent_width = parentWidget()->width();
+		int parent_height = parentWidget()->height();
+		setFixedSize(parent_width * 0.9f, parent_height);
+		move(parent_width * 0.05f, 0);
+		on_config_file_changed();
+	}
+
+
+	void on_select(const QModelIndex& index) {
+
+		QString name = standard_item_model->data(index).toString();
+		hide();
+		parentWidget()->setFocus();
+		(*on_done)(name.toStdString());
+	}
+};
+
+class FileSelector : public QWidget{
+private:
+
+	QLineEdit* line_edit = nullptr;
+	QListView* list_view = nullptr;
+	QStringListModel* list_model = nullptr;
+	std::function<void(std::wstring)> on_done = nullptr;
+	QString last_root = "";
+
+protected:
+	std::optional<QModelIndex> get_selected_index() {
+		QModelIndexList selected_index_list = list_view->selectionModel()->selectedIndexes();
+
+		if (selected_index_list.size() > 0) {
+			QModelIndex selected_index = selected_index_list.at(0);
+			return selected_index;
+		}
+		return {};
+	}
+
+	bool eventFilter(QObject* obj, QEvent* event) override {
+		if (obj == line_edit) {
+			if (event->type() == QEvent::KeyPress) {
+				QKeyEvent* key_event = static_cast<QKeyEvent*>(event);
+				if (key_event->key() == Qt::Key_Down || key_event->key() == Qt::Key_Up) {
+					QKeyEvent* new_key_event = new QKeyEvent(*key_event);
+					QCoreApplication::postEvent(list_view, new_key_event);
+					return true;
+				}
+				if (key_event->key() == Qt::Key_Tab) {
+					QKeyEvent* new_key_event = new QKeyEvent(key_event->type(), Qt::Key_Down, key_event->modifiers());
+					QCoreApplication::postEvent(list_view, new_key_event);
+					return true;
+				}
+				if (key_event->key() == Qt::Key_Backtab) {
+					QKeyEvent* new_key_event = new QKeyEvent(key_event->type(), Qt::Key_Up, key_event->modifiers());
+					QCoreApplication::postEvent(list_view, new_key_event);
+					return true;
+				}
+
+				if (key_event->key() == Qt::Key_Enter || key_event->key() == Qt::Key_Return) {
+					std::optional<QModelIndex> selected_index = get_selected_index();
+					if (selected_index) {
+						on_select(selected_index.value());
+					}
+				}
+
+			}
+		}
+		return false;
+	}
+
+public:
+
+	void on_config_file_changed() {
+		setStyleSheet("background-color: black; color: white; border: 0;");
+		list_view->setStyleSheet("QListView::item::selected{background-color: white; color: black;}");
+	}
+
+	//todo: check for memory leaks
+	//FilteredSelectWindowClass(std::vector<std::wstring> std_string_list, std::vector<T> values, std::function<void(void*)> on_done, ConfigManager* config_manager, QWidget* parent ) : 
+	FileSelector(std::function<void(std::wstring)> on_done, QWidget* parent) :
+		QWidget(parent) ,
+		on_done(on_done)
+	{
+		resize(300, 800);
+		QVBoxLayout* layout = new QVBoxLayout;
+		setLayout(layout);
+
+		list_model = new QStringListModel(get_dir_contents("", ""));
+
+		line_edit = new QLineEdit;
+		list_view = new QListView;
+		list_view->setEditTriggers(QAbstractItemView::NoEditTriggers);
+		list_view->setModel(list_model);
+		layout->addWidget(line_edit);
+		layout->addWidget(list_view);
+
+		line_edit->installEventFilter(this);
+		line_edit->setFocus();
+
+		QObject::connect(list_view, &QAbstractItemView::activated, [&](const QModelIndex& index) {
+			on_select(index);
+			});
+
+
+		QObject::connect(line_edit, &QLineEdit::textChanged, [&](const QString& text) {
+			QString root_path;
+			QString partial_name;
+			split_root_file(text, root_path, partial_name);
+
+			last_root = root_path;
+			if (last_root.size() > 0) {
+				if (last_root.back() == QDir::separator()) {
+					last_root.chop(1);
+				}
+			}
+
+			QStringListModel* new_list_model = new QStringListModel(get_dir_contents(root_path, partial_name));
+			list_view->setModel(new_list_model);
+			delete list_model;
+			list_model = new_list_model;
+			});
+
+
+		setStyleSheet("background-color: black; color: white; border: 0;");
+		list_view->setStyleSheet("QListView::item::selected{background-color: white; color: black;}");
+
+	}
+	QStringList get_dir_contents(QString root, QString prefix) {
+		root = expand_home_dir(root);
+		QDir directory(root);
+		return directory.entryList({ prefix + "*" });
+	}
+
+	void resizeEvent(QResizeEvent* resize_event) override {
+		QWidget::resizeEvent(resize_event);
+		int parent_width = parentWidget()->width();
+		int parent_height = parentWidget()->height();
+		setFixedSize(parent_width * 0.9f, parent_height);
+		move(parent_width * 0.05f, 0);
+		on_config_file_changed();
+	}
+
+
+	void on_select(const QModelIndex& index) {
+		//hide();
+
+		QString name = list_model->data(index).toString();
+		QChar sep = QDir::separator();
+		QString full_path = expand_home_dir(last_root + sep + name);
+
+		if (QFileInfo(full_path).isFile()){
+			on_done(full_path.toStdWString());
+			hide();
+			parentWidget()->setFocus();
+		}
+		else {
+			line_edit->setText(full_path + sep);
+		}
+	}
+};
 std::wstring select_document_file_name();
 std::wstring select_json_file_name();
 std::wstring select_new_json_file_name();
+

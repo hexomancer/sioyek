@@ -129,13 +129,20 @@ extern const int MAX_PENDING_REQUESTS = 31;
 extern bool FLAT_TABLE_OF_CONTENTS = false;
 extern bool SHOULD_USE_MULTIPLE_MONITORS = false;
 extern bool SHOULD_CHECK_FOR_LATEST_VERSION_ON_STARTUP = true;
+extern bool DEFAULT_DARK_MODE = false;
+extern bool SORT_BOOKMARKS_BY_LOCATION = false;
 extern std::wstring LIBGEN_ADDRESS = L"";
 extern std::wstring GOOGLE_SCHOLAR_ADDRESS = L"";
 extern std::wstring INVERSE_SEARCH_COMMAND = L"";
 extern std::wstring SHARED_DATABASE_PATH = L"";
+extern std::wstring UI_FONT_FACE_NAME = L"";
 extern bool SHOULD_LOAD_TUTORIAL_WHEN_NO_OTHER_FILE = false;
 extern bool SHOULD_LAUNCH_NEW_INSTANCE = true;
 extern bool SHOULD_DRAW_UNRENDERED_PAGES = true;
+extern bool HOVER_OVERVIEW = false;
+extern float VISUAL_MARK_NEXT_PAGE_FRACTION = 0.25f;
+extern float VISUAL_MARK_NEXT_PAGE_THRESHOLD = 0.1f;
+extern std::wstring ITEM_LIST_PREFIX = L">";
 
 extern Path default_config_path(L"");
 extern Path default_keys_path(L"");
@@ -162,12 +169,14 @@ void configure_paths(){
 #ifdef LINUX_STANDARD_PATHS
 	Path home_path(QDir::homePath().toStdWString());
 	Path standard_data_path = home_path.slash(L".local").slash(L"share").slash(L"sioyek");
-	Path standard_config_path = home_path.slash(L".config").slash(L"sioyek");
+	Path standard_config_path = Path(L"/etc/sioyek");
+	Path read_only_data_path = Path(L"/usr/share/sioyek");
+	standard_data_path.create_directories();
 
 	default_config_path = standard_config_path.slash(L"prefs.config");
 	default_keys_path = standard_config_path.slash(L"keys.config");
 
-	for (int i = 0; i < all_config_paths.size(); i++) {
+	for (int i = all_config_paths.size()-1; i >= 0; i--) {
 		user_config_paths.push_back(Path(all_config_paths.at(i).toStdWString()).slash(L"prefs_user.config"));
 		user_keys_paths.push_back(Path(all_config_paths.at(i).toStdWString()).slash(L"keys_user.config"));
 	}
@@ -175,9 +184,9 @@ void configure_paths(){
 	database_file_path = standard_data_path.slash(L"test.db");
 	local_database_file_path = standard_data_path.slash(L"local.db");
 	global_database_file_path = standard_data_path.slash(L"shared.db");
-	tutorial_path = standard_data_path.slash(L"tutorial.pdf");
+	tutorial_path = read_only_data_path.slash(L"tutorial.pdf");
 	last_opened_file_address_path = standard_data_path.slash(L"last_document_path.txt");
-	shader_path = standard_data_path.slash(L"shaders");
+	shader_path = read_only_data_path.slash(L"shaders");
 #else
 	char* APPDIR = std::getenv("XDG_CONFIG_HOME");
 
@@ -209,6 +218,8 @@ void configure_paths(){
 	//install_app(exe_path.c_str());
 #endif
 	Path standard_data_path(QStandardPaths::standardLocations(QStandardPaths::AppDataLocation).at(0).toStdWString());
+	QStringList all_config_paths = QStandardPaths::standardLocations(QStandardPaths::AppConfigLocation);
+
 	standard_data_path.create_directories();
 
 	default_config_path = parent_path.slash(L"prefs.config");
@@ -218,6 +229,10 @@ void configure_paths(){
 #ifdef NON_PORTABLE
 	user_config_paths.push_back(standard_data_path.slash(L"prefs_user.config"));
 	user_keys_paths.push_back(standard_data_path.slash(L"keys_user.config"));
+	for (int i = all_config_paths.size()-1; i > 0; i--) {
+		user_config_paths.push_back(Path(all_config_paths.at(i).toStdWString()).slash(L"prefs_user.config"));
+		user_keys_paths.push_back(Path(all_config_paths.at(i).toStdWString()).slash(L"keys_user.config"));
+	}
 	database_file_path = standard_data_path.slash(L"test.db");
 	local_database_file_path = standard_data_path.slash(L"local.db");
 	global_database_file_path = standard_data_path.slash(L"shared.db");
@@ -416,6 +431,10 @@ int main(int argc, char* args[]) {
 	//app.setWindowIcon(icon);
 
 	MainWidget main_widget(mupdf_context, &db_manager, &document_manager, &config_manager, &input_handler, &checksummer, &quit);
+
+	if (DEFAULT_DARK_MODE) {
+		main_widget.toggle_dark_mode();
+	}
 	//main_widget.open_document(file_path.get_path());
 	//main_widget.resize(500, 500);
 
