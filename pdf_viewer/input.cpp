@@ -61,9 +61,10 @@ CommandManager::CommandManager() {
 	commands.push_back({ "toggle_synctex", false, false , false, false});
 	//commands.push_back({ "command", true, false , false, false});
 	commands.push_back({ "command", false, false , false, false});
-	commands.push_back({ "search_selected_text_in_google_scholar", false, false , false, false});
+	//commands.push_back({ "search_selected_text_in_google_scholar", false, false , false, false});
+	//commands.push_back({ "search_selected_text_in_libgen", false, false , false, false});
+	commands.push_back({ "external_search", false, true , false, false});
 	commands.push_back({ "open_selected_url", false, false , false, false});
-	commands.push_back({ "search_selected_text_in_libgen", false, false , false, false});
 	commands.push_back({ "screen_down", false, false , false, false});
 	commands.push_back({ "screen_up", false, false , false, false});
 	commands.push_back({ "next_chapter", false, false , false, true});
@@ -84,6 +85,7 @@ CommandManager::CommandManager() {
 	commands.push_back({ "move_visual_mark_up", false, false , false, false});
 	commands.push_back({ "set_page_offset", true, false , false, false});
 	commands.push_back({ "toggle_visual_scroll", false, false , false, false});
+	commands.push_back({ "toggle_horizontal_scroll_lock", false, false , false, false});
 }
 
 const Command* CommandManager::get_command_with_name(std::string name) {

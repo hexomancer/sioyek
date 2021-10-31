@@ -59,6 +59,7 @@ extern std::wstring LIBGEN_ADDRESS;
 extern std::wstring INVERSE_SEARCH_COMMAND;
 extern float VISUAL_MARK_NEXT_PAGE_FRACTION;
 extern float VISUAL_MARK_NEXT_PAGE_THRESHOLD;
+extern float SMALL_PIXMAP_SCALE;
 
 extern Path default_config_path;
 extern Path default_keys_path;
@@ -68,7 +69,9 @@ extern Path database_file_path;
 extern Path tutorial_path;
 extern Path last_opened_file_address_path;
 extern std::wstring ITEM_LIST_PREFIX;
-
+extern std::wstring SEARCH_URLS[26];
+extern std::wstring MIDDLE_CLICK_SEARCH_ENGINE;
+extern std::wstring SHIFT_MIDDLE_CLICK_SEARCH_ENGINE;
 
 bool MainWidget::main_document_view_has_document()
 {
@@ -123,7 +126,9 @@ void MainWidget::set_overview_link(PdfLink link) {
 	float offset_x, offset_y;
 
 	parse_uri(link.uri, &page, &offset_x, &offset_y);
-	set_overview_position(page - 1, offset_y);
+	if (page >= 1) {
+		set_overview_position(page - 1, offset_y);
+	}
 
 	//int current_page = main_document_view->get_current_page_number();
 	//float page_height = main_document_view->get_document()->get_page_height(current_page);
@@ -416,6 +421,10 @@ std::wstring MainWidget::get_status_string() {
 		ss << " [ visual scroll mode ] ";
 	}
 
+	if (horizontal_scroll_locked) {
+		ss << " [ locked horizontal scroll ] ";
+	}
+
 	return ss.str();
 }
 
@@ -432,6 +441,9 @@ void MainWidget::handle_escape() {
 	if (main_document_view) {
 		main_document_view->handle_escape();
 		opengl_widget->handle_escape();
+	}
+	if (opengl_widget) {
+		opengl_widget->set_overview_page({});
 	}
 
 	text_command_line_edit_container->hide();
@@ -805,6 +817,16 @@ void MainWidget::handle_command_with_symbol(const Command* command, char symbol)
 			selected_text.clear();
 		}
 	}
+	else if (command->name == "external_search") {
+		if ((symbol >= 'a') && (symbol <= 'z')) {
+			search_custom_engine(selected_text, SEARCH_URLS[symbol - 'a']);
+		}
+		//if (opengl_widget->selected_character_rects.size() > 0) {
+		//	main_document_view->add_highlight({ selection_begin_x, selection_begin_y }, { selection_end_x, selection_end_y }, symbol);
+		//	opengl_widget->selected_character_rects.clear();
+		//	selected_text.clear();
+		//}
+	}
 	else if (command->name == "goto_mark") {
 		assert(main_document_view);
 
@@ -1044,16 +1066,14 @@ void MainWidget::handle_right_click(float x, float y, bool down) {
 			main_document_view->window_to_document_pos(x, y, &doc_x, &doc_y, &page);
 			if (page != -1) {
 				opengl_widget->set_should_draw_vertical_line(true);
-				float scale = 0.5f;
-				fz_matrix ctm = fz_scale(scale, scale);
 				fz_pixmap* pixmap = main_document_view->get_document()->get_small_pixmap(page);
 				std::vector<unsigned int> hist = get_max_width_histogram_from_pixmap(pixmap);
 				std::vector<unsigned int> line_locations = get_line_ends_from_histogram(hist);
-				int small_doc_x = static_cast<int>(doc_x * scale);
-				int small_doc_y = static_cast<int>(doc_y * scale);
+				int small_doc_x = static_cast<int>(doc_x * SMALL_PIXMAP_SCALE);
+				int small_doc_y = static_cast<int>(doc_y * SMALL_PIXMAP_SCALE);
 				int best_vertical_loc = find_best_vertical_line_location(pixmap, small_doc_x, small_doc_y);
 				//int best_vertical_loc = line_locations[find_nth_larger_element_in_sorted_list(line_locations, static_cast<unsigned int>(small_doc_y), 2)];
-				float best_vertical_loc_doc_pos = best_vertical_loc / scale;
+				float best_vertical_loc_doc_pos = best_vertical_loc / SMALL_PIXMAP_SCALE;
 				int window_x, window_y;
 				main_document_view->document_to_window_pos_in_pixels(page, doc_x, best_vertical_loc_doc_pos, &window_x, &window_y);
 				float abs_doc_x, abs_doc_y;
@@ -1407,11 +1427,15 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
 		}
 		if (paper_name_on_pointer) {
 			if (paper_name_on_pointer.value().size() > 5) {
+				char type;
 				if (is_shift_pressed) {
-					search_libgen(paper_name_on_pointer.value());
+					type = SHIFT_MIDDLE_CLICK_SEARCH_ENGINE[0];
 				}
 				else {
-					search_google_scholar(paper_name_on_pointer.value());
+					type = MIDDLE_CLICK_SEARCH_ENGINE[0];
+				}
+				if ((type >= 'a') && (type <= 'z')) {
+					search_custom_engine(paper_name_on_pointer.value(), SEARCH_URLS[type - 'a']);
 				}
 			}
 		}
@@ -1612,13 +1636,17 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 		}
 
 		if (command->name == "move_right") {
-			main_document_view->move(72.0f * rp * HORIZONTAL_MOVE_AMOUNT, 0.0f);
-			last_smart_fit_page = {};
+			if (!horizontal_scroll_locked) {
+				main_document_view->move(72.0f * rp * HORIZONTAL_MOVE_AMOUNT, 0.0f);
+				last_smart_fit_page = {};
+			}
 		}
 
 		if (command->name == "move_left") {
-			main_document_view->move(-72.0f * rp * HORIZONTAL_MOVE_AMOUNT, 0.0f);
-			last_smart_fit_page = {};
+			if (!horizontal_scroll_locked) {
+				main_document_view->move(-72.0f * rp * HORIZONTAL_MOVE_AMOUNT, 0.0f);
+				last_smart_fit_page = {};
+			}
 		}
 	}
 	else {
@@ -2042,6 +2070,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 	}
 	else if (command->name == "debug") {
 	}
+	else if (command->name == "toggle_horizontal_scroll_lock") {
+		horizontal_scroll_locked = !horizontal_scroll_locked;
+	}
 	else if (command->name == "move_visual_mark_down") {
 		float new_pos = get_ith_next_line_from_absolute_y(main_document_view->get_vertical_line_pos(), 2, true);
 		main_document_view->set_vertical_line_pos(new_pos);
@@ -2290,19 +2321,17 @@ float MainWidget::get_ith_next_line_from_absolute_y(float absolute_y, int i, boo
 		int page;
 		main_document_view->get_document()->absolute_to_page_pos(0, absolute_y, &doc_x, &doc_y, &page);
 
-		float scale = 0.5f;
-		fz_matrix ctm = fz_scale(scale, scale);
 		fz_pixmap* pixmap = main_document_view->get_document()->get_small_pixmap(page);
 		std::vector<unsigned int> hist = get_max_width_histogram_from_pixmap(pixmap);
 		std::vector<unsigned int> line_locations = get_line_ends_from_histogram(hist);
-		int small_doc_x = static_cast<int>(doc_x * scale);
-		int small_doc_y = static_cast<int>(doc_y * scale);
+		int small_doc_x = static_cast<int>(doc_x * SMALL_PIXMAP_SCALE);
+		int small_doc_y = static_cast<int>(doc_y * SMALL_PIXMAP_SCALE);
 
 		int index = find_nth_larger_element_in_sorted_list(line_locations, static_cast<unsigned int>(small_doc_y - 0.3f), i);
 
 		if (index > -1) {
 			int best_vertical_loc = line_locations[index];
-			float best_vertical_loc_doc_pos = best_vertical_loc / scale;
+			float best_vertical_loc_doc_pos = best_vertical_loc / SMALL_PIXMAP_SCALE;
 			int window_x, window_y;
 			main_document_view->document_to_window_pos_in_pixels(page, doc_x, best_vertical_loc_doc_pos, &window_x, &window_y);
 			float abs_doc_x, abs_doc_y;

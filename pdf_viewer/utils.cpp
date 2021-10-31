@@ -778,6 +778,7 @@ void index_generic(const std::vector<fz_stext_char*>& flat_chars, int page_numbe
 	std::wsmatch match;
 
 
+	int offset = 0;
 	while (std::regex_search(page_string, match, index_dst_regex)) {
 		
 		IndexedData new_data;
@@ -789,11 +790,13 @@ void index_generic(const std::vector<fz_stext_char*>& flat_chars, int page_numbe
 		int match_start_index = match.position();
 		int match_size = match_string.size();
 		for (int i = 0; i < match_size; i++) {
-			int index = match_start_index + i;
+			int index = offset +  match_start_index + i;
 			if (page_rects[index]) {
 				new_data.y_offset = page_rects[index].value().y0;
+				break;
 			}
 		}
+		offset += match_start_index + match_size;
 		page_string = match.suffix();
 
 		indices.push_back(new_data);
@@ -1052,14 +1055,31 @@ std::vector<unsigned int> get_line_ends_from_histogram(std::vector<unsigned int>
 	int i = 0;
 
 	while (i < histogram.size()) {
-		//while ((i < histogram.size()) && (histogram[i] > mean_width)) i++;
-		//while ((i < histogram.size()) && (histogram[i] <= (mean_width / 2))) i++;
 
 		while ((i < histogram.size()) && (normalized_histogram[i] > 0.2f)) i++;
 		while ((i < histogram.size()) && (normalized_histogram[i] <= 0.21f)) i++;
 		if (i == histogram.size()) break;
 		res.push_back(i);
 	}
+
+	float additional_distance = 0.0f;
+
+	if (res.size() > 5) {
+		std::vector<float> line_distances;
+
+		for (int i = 0; i < res.size() - 1; i++) {
+			line_distances.push_back(res[i + 1] - res[i]);
+		}
+		std::nth_element(line_distances.begin(), line_distances.begin() + line_distances.size() / 2, line_distances.end());
+		additional_distance = line_distances[line_distances.size() / 2];
+
+		for (int i = 0; i < res.size(); i++) {
+			res[i] += static_cast<unsigned int>(additional_distance / 5.0f);
+		}
+
+	}
+
+
 	return res;
 }
 
