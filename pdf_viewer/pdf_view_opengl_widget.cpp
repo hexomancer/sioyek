@@ -12,6 +12,9 @@ extern float ZOOM_INC_FACTOR;
 extern float VERTICAL_MOVE_AMOUNT;
 extern float HIGHLIGHT_COLORS[26 * 3];
 extern bool SHOULD_DRAW_UNRENDERED_PAGES;
+extern float CUSTOM_BACKGROUND_COLOR[3];
+extern float CUSTOM_TEXT_COLOR[3];
+
 
 GLfloat g_quad_vertex[] = {
 	-1.0f, -1.0f,
@@ -148,6 +151,7 @@ void PdfViewOpenGLWidget::initializeGL() {
 		shared_gl_objects.highlight_program = LoadShaders( shader_path.slash(L"simple.vertex"),  shader_path .slash(L"highlight.fragment"));
 		shared_gl_objects.vertical_line_program = LoadShaders(shader_path.slash(L"simple.vertex"),  shader_path .slash(L"vertical_bar.fragment"));
 		shared_gl_objects.vertical_line_dark_program = LoadShaders(shader_path.slash(L"simple.vertex"),  shader_path .slash(L"vertical_bar_dark.fragment"));
+		shared_gl_objects.custom_color_program = LoadShaders(shader_path.slash(L"simple.vertex"),  shader_path.slash(L"custom_colors.fragment"));
 
 		shared_gl_objects.dark_mode_contrast_uniform_location = glGetUniformLocation(shared_gl_objects.rendered_dark_program, "contrast");
 
@@ -156,6 +160,9 @@ void PdfViewOpenGLWidget::initializeGL() {
 		shared_gl_objects.line_color_uniform_location = glGetUniformLocation(shared_gl_objects.vertical_line_program, "line_color");
 		shared_gl_objects.line_time_uniform_location = glGetUniformLocation(shared_gl_objects.vertical_line_program, "time");
 		shared_gl_objects.line_freq_uniform_location = glGetUniformLocation(shared_gl_objects.vertical_line_program, "freq");
+
+		shared_gl_objects.custom_color_background_uniform_location = glGetUniformLocation(shared_gl_objects.custom_color_program, "background_color");
+		shared_gl_objects.custom_color_text_uniform_location = glGetUniformLocation(shared_gl_objects.custom_color_program, "text_color");
 
 		glGenBuffers(1, &shared_gl_objects.vertex_buffer_object);
 		glGenBuffers(1, &shared_gl_objects.uv_buffer_object);
@@ -386,26 +393,24 @@ void PdfViewOpenGLWidget::render_overview(OverviewState overview) {
 	float page_window_width = abs(window_rect.x1 - window_rect.x0);
 	float page_window_height = abs(window_rect.y1 - window_rect.y0);
 
-	float overview_half_width = 0.8f;
-	float overview_half_height = 0.4f;
 
-	page_vertices[0] = -overview_half_width;
-	page_vertices[1] = overview_half_height;
-	page_vertices[2] = overview_half_width;
-	page_vertices[3] = overview_half_height;
-	page_vertices[4] = -overview_half_width;
-	page_vertices[5] = -overview_half_height;
-	page_vertices[6] = overview_half_width;
-	page_vertices[7] = -overview_half_height;
+	page_vertices[0] = overview_offset_x - overview_half_width;
+	page_vertices[1] = overview_offset_y + overview_half_height;
+	page_vertices[2] = overview_offset_x + overview_half_width;
+	page_vertices[3] = overview_offset_y + overview_half_height;
+	page_vertices[4] = overview_offset_x - overview_half_width;
+	page_vertices[5] = overview_offset_y - overview_half_height;
+	page_vertices[6] = overview_offset_x + overview_half_width;
+	page_vertices[7] = overview_offset_y - overview_half_height;
 
-	border_vertices[0] = -overview_half_width;
-	border_vertices[1] = overview_half_height;
-	border_vertices[2] = -overview_half_width;
-	border_vertices[3] = -overview_half_height;
-	border_vertices[4] = overview_half_width;
-	border_vertices[5] = -overview_half_height;
-	border_vertices[6] = overview_half_width;
-	border_vertices[7] = overview_half_height;
+	border_vertices[0] = overview_offset_x - overview_half_width;
+	border_vertices[1] = overview_offset_y + overview_half_height;
+	border_vertices[2] = overview_offset_x - overview_half_width;
+	border_vertices[3] = overview_offset_y -overview_half_height;
+	border_vertices[4] = overview_offset_x + overview_half_width;
+	border_vertices[5] = overview_offset_y - overview_half_height;
+	border_vertices[6] = overview_offset_x + overview_half_width;
+	border_vertices[7] = overview_offset_y + overview_half_height;
 
 	float overview_y_span = 1 * page_window_width / page_window_height * overview_half_height / overview_half_width;
 
@@ -425,13 +430,14 @@ void PdfViewOpenGLWidget::render_overview(OverviewState overview) {
 	page_uvs[7] = uv_max_y;
 
 	if (texture != 0) {
-		if (is_dark_mode) {
-			glUseProgram(shared_gl_objects.rendered_dark_program);
-			glUniform1f(shared_gl_objects.dark_mode_contrast_uniform_location, DARK_MODE_CONTRAST);
-		}
-		else {
-			glUseProgram(shared_gl_objects.rendered_program);
-		}
+		//if (is_dark_mode) {
+		//	glUseProgram(shared_gl_objects.rendered_dark_program);
+		//	glUniform1f(shared_gl_objects.dark_mode_contrast_uniform_location, DARK_MODE_CONTRAST);
+		//}
+		//else {
+		//	glUseProgram(shared_gl_objects.rendered_program);
+		//}
+		bind_program();
 
 		glBindTexture(GL_TEXTURE_2D, texture);
 	}
@@ -487,13 +493,14 @@ void PdfViewOpenGLWidget::render_page(int page_number) {
 
 	if (texture != 0) {
 
-		if (is_dark_mode) {
-			glUseProgram(shared_gl_objects.rendered_dark_program);
-			glUniform1f(shared_gl_objects.dark_mode_contrast_uniform_location, DARK_MODE_CONTRAST);
-		}
-		else {
-			glUseProgram(shared_gl_objects.rendered_program);
-		}
+		//if (is_dark_mode) {
+		//	glUseProgram(shared_gl_objects.rendered_dark_program);
+		//	glUniform1f(shared_gl_objects.dark_mode_contrast_uniform_location, DARK_MODE_CONTRAST);
+		//}
+		//else {
+		//	glUseProgram(shared_gl_objects.rendered_program);
+		//}
+		bind_program();
 
 		glBindTexture(GL_TEXTURE_2D, texture);
 	}
@@ -527,8 +534,11 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 	std::vector<int> visible_pages;
 	document_view->get_visible_pages(document_view->get_view_height(), visible_pages);
 
-	if (is_dark_mode) {
+	if (color_mode == ColorPalette::Dark) {
 		glClearColor(DARK_MODE_BACKGROUND_COLOR[0], DARK_MODE_BACKGROUND_COLOR[1], DARK_MODE_BACKGROUND_COLOR[2], 1.0f);
+	}
+	else if (color_mode == ColorPalette::Custom) {
+		glClearColor(CUSTOM_BACKGROUND_COLOR[0], CUSTOM_BACKGROUND_COLOR[1], CUSTOM_BACKGROUND_COLOR[2], 1.0f);
 	}
 	else {
 		glClearColor(BACKGROUND_COLOR[0], BACKGROUND_COLOR[1], BACKGROUND_COLOR[2], 1.0f);
@@ -636,7 +646,7 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 	if (should_draw_vertical_line) {
 		//render_line_window(shared_gl_objects.vertical_line_program ,vertical_line_location);
 
-		if (is_dark_mode) {
+		if (color_mode = ColorPalette::Dark) {
 			render_line_window(shared_gl_objects.vertical_line_dark_program , document_view->get_vertical_line_window_y());
 		}
 		else {
@@ -716,7 +726,17 @@ void PdfViewOpenGLWidget::search_text(const std::wstring& text, std::optional<st
 
 void PdfViewOpenGLWidget::set_dark_mode(bool mode)
 {
-	this->is_dark_mode = mode;
+	if (mode == true) {
+		this->color_mode = ColorPalette::Dark;
+	}
+	else {
+		this->color_mode = ColorPalette::Normal;
+	}
+}
+
+void PdfViewOpenGLWidget::toggle_dark_mode()
+{
+	set_dark_mode(!(this->color_mode == ColorPalette::Dark));
 }
 
 void PdfViewOpenGLWidget::set_synctex_highlights(std::vector<std::pair<int, fz_rect>> highlights)
@@ -884,4 +904,170 @@ bool PdfViewOpenGLWidget::is_presentation_mode() {
 		return true;
 	}
 	return false;
+}
+
+fz_rect	PdfViewOpenGLWidget::get_overview_rect() {
+	fz_rect res;
+	res.x0 = overview_offset_x - overview_half_width;
+	res.y0 = -overview_offset_y - overview_half_height;
+	res.x1 = overview_offset_x + overview_half_width;
+	res.y1 = -overview_offset_y + overview_half_height;
+	return res;
+}
+
+std::vector<fz_rect> PdfViewOpenGLWidget::get_overview_border_rects() {
+	std::vector<fz_rect> res;
+
+	fz_rect bottom_rect;
+	fz_rect top_rect;
+	fz_rect left_rect;
+	fz_rect right_rect;
+
+	bottom_rect.x0 = overview_offset_x - overview_half_width;
+	bottom_rect.y0 = -overview_offset_y - overview_half_height - 0.05f;
+	bottom_rect.x1 = overview_offset_x + overview_half_width;
+	bottom_rect.y1 = -overview_offset_y - overview_half_height + 0.05f;
+
+	top_rect.x0 = overview_offset_x - overview_half_width;
+	top_rect.y0 = -overview_offset_y + overview_half_height - 0.05f;
+	top_rect.x1 = overview_offset_x + overview_half_width;
+	top_rect.y1 = -overview_offset_y + overview_half_height + 0.05f;
+
+	left_rect.x0 = overview_offset_x - overview_half_width - 0.05f;
+	left_rect.y0 = -overview_offset_y - overview_half_height;
+	left_rect.x1 = overview_offset_x - overview_half_width + 0.05f;
+	left_rect.y1 = -overview_offset_y + overview_half_height;
+
+	right_rect.x0 = overview_offset_x + overview_half_width - 0.05f;
+	right_rect.y0 = -overview_offset_y - overview_half_height;
+	right_rect.x1 = overview_offset_x + overview_half_width + 0.05f;
+	right_rect.y1 = -overview_offset_y + overview_half_height;
+
+	res.push_back(bottom_rect);
+	res.push_back(top_rect);
+	res.push_back(left_rect);
+	res.push_back(right_rect);
+
+	return res;
+}
+
+bool PdfViewOpenGLWidget::is_window_point_in_overview(float window_x, float window_y) {
+	if (get_overview_page()) {
+		fz_point point{ window_x, window_y };
+		fz_rect rect = get_overview_rect();
+		bool res = fz_is_point_inside_rect(point, rect);
+		return res;
+	}
+	return false;
+}
+
+bool PdfViewOpenGLWidget::is_window_point_in_overview_border(float window_x, float window_y, OverviewSide* which_border) {
+
+	fz_point point{ window_x, window_y };
+	std::vector<fz_rect> rects = get_overview_border_rects();
+	for (int i = 0; i < rects.size(); i++) {
+		if (fz_is_point_inside_rect(point, rects[i])) {
+			*which_border = static_cast<OverviewSide>(i);
+			return true;
+		}
+	}
+	return false;
+}
+
+void PdfViewOpenGLWidget::get_overview_offsets(float* offset_x, float* offset_y) {
+	*offset_x = overview_offset_x;
+	*offset_y = overview_offset_y;
+}
+void PdfViewOpenGLWidget::set_overview_offsets(float offset_x, float offset_y) {
+	overview_offset_x = offset_x;
+	overview_offset_y = offset_y;
+}
+
+float PdfViewOpenGLWidget::get_overview_side_pos(int index) {
+	if (index == OverviewSide::bottom) {
+		return overview_offset_y - overview_half_height;
+	}
+	if (index == OverviewSide::top) {
+		return overview_offset_y + overview_half_height;
+	}
+	if (index == OverviewSide::left) {
+		return overview_offset_x - overview_half_width;
+	}
+	if (index == OverviewSide::right) {
+		return overview_offset_x + overview_half_width;
+	}
+}
+
+void PdfViewOpenGLWidget::set_overview_side_pos(int index, fz_rect original_rect, float diff_x, float diff_y) {
+
+	fz_rect new_rect = original_rect;
+
+	if (index == OverviewSide::bottom) {
+		float new_bottom_pos = original_rect.y0 + diff_y;
+		if (new_bottom_pos < original_rect.y1) {
+			new_rect.y0 = new_bottom_pos;
+		}
+	}
+	if (index == OverviewSide::top) {
+		float new_top_pos = original_rect.y1 + diff_y;
+		if (new_top_pos > original_rect.y0) {
+			new_rect.y1 = new_top_pos;
+		}
+	}
+	if (index == OverviewSide::left) {
+		float new_left_pos = original_rect.x0 + diff_x;
+		if (new_left_pos < original_rect.x1) {
+			new_rect.x0 = new_left_pos;
+		}
+	}
+	if (index == OverviewSide::right) {
+		float new_right_pos = original_rect.x1 + diff_x;
+		if (new_right_pos > original_rect.x0) {
+			new_rect.x1 = new_right_pos;
+		}
+	}
+	set_overview_rect(new_rect);
+
+}
+
+void PdfViewOpenGLWidget::set_overview_rect(fz_rect rect) {
+	float halfwidth = (rect.x1 - rect.x0) / 2;
+	float halfheight = (rect.y1 - rect.y0) / 2;
+	float offset_x = rect.x0 + halfwidth;
+	float offset_y = rect.y0 + halfheight;
+
+	overview_offset_x = offset_x;
+	overview_offset_y = -offset_y;
+	overview_half_width = halfwidth;
+	overview_half_height = halfheight;
+}
+
+void PdfViewOpenGLWidget::set_custom_color_mode(bool mode) {
+	if (mode) {
+		this->color_mode = ColorPalette::Custom;
+	}
+	else {
+		this->color_mode = ColorPalette::Normal;
+	}
+}
+
+void PdfViewOpenGLWidget::toggle_custom_color_mode() {
+	set_custom_color_mode(!(this->color_mode == ColorPalette::Custom));
+}
+
+void PdfViewOpenGLWidget::bind_program() {
+	if (color_mode == ColorPalette::Dark) {
+		glUseProgram(shared_gl_objects.rendered_dark_program);
+		glUniform1f(shared_gl_objects.dark_mode_contrast_uniform_location, DARK_MODE_CONTRAST);
+	}
+	else if (color_mode == ColorPalette::Custom) {
+		glUseProgram(shared_gl_objects.custom_color_program);
+
+
+		glUniform3fv(shared_gl_objects.custom_color_background_uniform_location, 1, CUSTOM_BACKGROUND_COLOR);
+		glUniform3fv(shared_gl_objects.custom_color_text_uniform_location, 1, CUSTOM_TEXT_COLOR);
+	}
+	else {
+		glUseProgram(shared_gl_objects.rendered_program);
+	}
 }

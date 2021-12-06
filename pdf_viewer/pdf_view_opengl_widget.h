@@ -47,6 +47,7 @@ struct OpenGLSharedResources {
 	GLuint uv_buffer_object;
 	GLuint rendered_program;
 	GLuint rendered_dark_program;
+	GLuint custom_color_program;
 	GLuint unrendered_program;
 	GLuint highlight_program;
 	GLuint vertical_line_program;
@@ -58,6 +59,9 @@ struct OpenGLSharedResources {
 	GLint line_time_uniform_location;
 	GLint line_freq_uniform_location;
 
+	GLint custom_color_background_uniform_location;
+	GLint custom_color_text_uniform_location;
+
 	bool is_initialized;
 };
 
@@ -68,6 +72,32 @@ struct OverviewState {
 };
 
 class PdfViewOpenGLWidget : public QOpenGLWidget, protected QOpenGLExtraFunctions {
+public:
+
+	enum OverviewSide {
+		bottom=0,
+		top=1,
+		left=2,
+		right=3
+	};
+
+	struct OverviewResizeData {
+		fz_rect original_rect;
+		std::pair<float, float> original_mouse_pos;
+		OverviewSide side_index;
+	};
+
+	struct OverviewMoveData {
+		std::pair<float, float> original_offsets;
+		std::pair<float, float> original_mouse_pos;
+	};
+
+	enum ColorPalette {
+		Normal,
+		Dark,
+		Custom
+	};
+
 private:
 	static OpenGLSharedResources shared_gl_objects;
 
@@ -82,7 +112,7 @@ private:
 	bool is_search_cancelled = true;
 	bool is_searching;
 	bool should_highlight_links = false;
-	bool is_dark_mode = false;
+	ColorPalette color_mode = ColorPalette::Normal;
 	bool is_helper = false;
 	float percent_done = 0.0f;
 	std::optional<int> visible_page_number = {};
@@ -101,6 +131,12 @@ private:
 
 	std::optional<std::function<void(const OpenedBookState&)>> on_link_edit = {};
 	std::optional<OverviewState> overview_page = {};
+
+	float overview_half_width = 0.8f;
+	float overview_half_height = 0.4f;
+
+	float overview_offset_x = 0.0f;
+	float overview_offset_y = 0.0f;
 
 	GLuint LoadShaders(Path vertex_file_path_, Path fragment_file_path_);
 protected:
@@ -144,6 +180,9 @@ public:
 	bool get_is_searching(float* prog);
 	void search_text(const std::wstring& text, std::optional<std::pair<int, int>> range = {});
 	void set_dark_mode(bool mode);
+	void toggle_dark_mode();
+	void set_custom_color_mode(bool mode);
+	void toggle_custom_color_mode();
 	void set_synctex_highlights(std::vector<std::pair<int, fz_rect>> highlights);
 	void on_document_view_reset();
 	void mouseMoveEvent(QMouseEvent* mouse_event) override;
@@ -156,4 +195,18 @@ public:
 	void draw_empty_helper_message(QPainter* painter);
 	void set_visible_page_number(std::optional<int> val);
 	bool is_presentation_mode();
+	fz_rect	get_overview_rect();
+	std::vector<fz_rect> get_overview_border_rects();
+	bool is_window_point_in_overview(float window_x, float window_y);
+	bool is_window_point_in_overview_border(float window_x, float window_y, OverviewSide *which_border);
+
+	void get_overview_offsets(float* offset_x, float* offset_y);
+
+	float get_overview_side_pos(int index);
+	void set_overview_side_pos(int index, fz_rect original_rect, float diff_x, float diff_y);
+	void set_overview_rect(fz_rect rect);
+
+	void set_overview_offsets(float offset_x, float offset_y);
+
+	void bind_program();
 };

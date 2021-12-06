@@ -54,6 +54,7 @@ CommandManager::CommandManager() {
 	commands.push_back({ "edit_link", false, false , false, false});
 	commands.push_back({ "open_prev_doc", false, false , false, false});
 	commands.push_back({ "open_document_embedded", false, false , false, false});
+	commands.push_back({ "open_document_embedded_from_current_path", false, false , false, false});
 	commands.push_back({ "copy", false, false , false, false});
 	commands.push_back({ "toggle_fullscreen", false, false , false, false});
 	commands.push_back({ "toggle_one_window", false, false , false, false});
@@ -86,6 +87,7 @@ CommandManager::CommandManager() {
 	commands.push_back({ "set_page_offset", true, false , false, false});
 	commands.push_back({ "toggle_visual_scroll", false, false , false, false});
 	commands.push_back({ "toggle_horizontal_scroll_lock", false, false , false, false});
+	commands.push_back({ "toggle_custom_color", false, false , false, false});
 }
 
 const Command* CommandManager::get_command_with_name(std::string name) {

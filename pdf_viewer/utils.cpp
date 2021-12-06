@@ -724,7 +724,10 @@ void find_regex_matches_in_stext_page(const std::vector<fz_stext_char*>& flat_ch
 
 bool are_stext_chars_far_enough_for_equation(fz_stext_char* first, fz_stext_char* second) {
 	float second_width = second->quad.lr.x - second->quad.ll.x;
-	assert(second_width >= 0);
+
+	if (second_width < 0) {
+		return false;
+	}
 
 	return (second->origin.x - first->origin.x) > (5 * second_width);
 }
@@ -1047,6 +1050,10 @@ std::vector<unsigned int> get_line_ends_from_histogram(std::vector<unsigned int>
 	float std = standard_deviation(histogram, mean_width);
 
 	std::vector<float> normalized_histogram;
+
+	if (std < 0.00001f) {
+		return res;
+	}
 
 	for (auto x : histogram) {
 		normalized_histogram.push_back((x - mean_width) / std);
@@ -1377,6 +1384,10 @@ QString expand_home_dir(QString path) {
 void split_root_file(QString path, QString& out_root, QString& out_partial) {
 
 	QChar sep = QDir::separator();
+	if (path.indexOf(sep) == -1) {
+		sep = '/';
+	}
+
 	QStringList parts = path.split(sep);
 
 	if (path.size() > 0) {
@@ -1391,7 +1402,7 @@ void split_root_file(QString path, QString& out_root, QString& out_partial) {
 			else {
 				out_partial = parts.back();
 				parts.pop_back();
-				out_root = parts.join(sep);
+				out_root = parts.join(QDir::separator());
 			}
 		}
 	}

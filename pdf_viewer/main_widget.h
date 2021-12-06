@@ -86,7 +86,6 @@ private:
 
 	std::optional<std::pair<std::optional<std::wstring>, Link>> pending_link;
 
-	bool dark_mode = false;
 	bool mouse_drag_mode = false;
 	bool synctex_mode = false;
 	bool is_dragging = false;
@@ -106,6 +105,9 @@ private:
 	std::optional<int> last_smart_fit_page = {};
 
 	std::wstring inverse_search_command;
+
+	std::optional<PdfViewOpenGLWidget::OverviewMoveData> overview_move_data = {};
+	std::optional<PdfViewOpenGLWidget::OverviewResizeData> overview_resize_data = {};
 
 	QTime last_text_select_time = QTime::currentTime();
 
@@ -185,8 +187,8 @@ public:
 	void move_document_screens(int num_screens);
 
 	void on_config_file_changed(ConfigManager* new_config) override;
-	void toggle_dark_mode();
 	void toggle_mouse_drag_mode();
+	void toggle_dark_mode();
 	void do_synctex_forward_search(const Path& pdf_file_path,const Path& latex_file_path, int line);
 	void on_new_instance_message(qint32 instance_id, QByteArray arguments);
 	void handle_args(const QStringList &arguments);
@@ -199,5 +201,6 @@ public:
 	void set_overview_link(PdfLink link);
 	void set_overview_position(int page, float offset);
 	bool find_location_of_text_under_pointer(int pointer_x, int pointer_y, int* out_page, float* out_offset);
+	std::optional<std::wstring> get_current_file_name();
 	CommandManager* get_command_manager();
 };
