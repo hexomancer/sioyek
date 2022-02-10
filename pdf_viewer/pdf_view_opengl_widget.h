@@ -112,6 +112,7 @@ private:
 	bool is_search_cancelled = true;
 	bool is_searching;
 	bool should_highlight_links = false;
+	bool should_show_numbers = false;
 	ColorPalette color_mode = ColorPalette::Normal;
 	bool is_helper = false;
 	float percent_done = 0.0f;
@@ -170,7 +171,7 @@ public:
 	bool get_should_draw_vertical_line();
 	void handle_escape();
 	void toggle_highlight_links();
-	void set_highlight_links(bool should_highlight);
+	void set_highlight_links(bool should_highlight_links, bool should_show_numbers);
 	int get_num_search_results();
 	int get_current_search_result_index();
 	bool valid_document();
@@ -209,4 +210,5 @@ public:
 	void set_overview_offsets(float offset_x, float offset_y);
 
 	void bind_program();
+	void cancel_search();
 };

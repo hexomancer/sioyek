@@ -2,6 +2,8 @@
 #include "utils.h"
 #include <qdatetime.h>
 
+extern bool LINEAR_TEXTURE_FILTERING;
+
 PdfRenderer::PdfRenderer(int num_threads, bool* should_quit_pointer, fz_context* context_to_clone, float display_scale) : context_to_clone(context_to_clone),
 should_quit_pointer(should_quit_pointer),
 num_threads(num_threads),
@@ -131,19 +133,25 @@ GLuint PdfRenderer::find_rendered_page(std::wstring path, int page, float zoom_l
 					glGenTextures(1, &result);
 					glBindTexture(GL_TEXTURE_2D, result);
 
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+					if (LINEAR_TEXTURE_FILTERING) {
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+					}
+					else {
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+					}
+
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
 
 					// OpenGL usually expects powers of two textures and since our pixmaps dimensions are
 					// often not powers of two, we set the unpack alignment to 1 (no alignment) 
+
 					glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-					glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-					glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
-					glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
 					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, cached_resp.pixmap->w, cached_resp.pixmap->h, 0, GL_RGB, GL_UNSIGNED_BYTE, cached_resp.pixmap->samples);
+					glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 					std::wcout << "texture: " << result << std::endl;
 					cached_resp.texture = result;
 				}

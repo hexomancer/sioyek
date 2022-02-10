@@ -14,7 +14,7 @@ extern float HIGHLIGHT_COLORS[26 * 3];
 extern bool SHOULD_DRAW_UNRENDERED_PAGES;
 extern float CUSTOM_BACKGROUND_COLOR[3];
 extern float CUSTOM_TEXT_COLOR[3];
-
+extern bool RERENDER_OVERVIEW;
 
 GLfloat g_quad_vertex[] = {
 	-1.0f, -1.0f,
@@ -296,13 +296,9 @@ void PdfViewOpenGLWidget::paintGL() {
 	QColor red_color = QColor::fromRgb(255, 0, 0);
 	painter.setPen(red_color);
 
-	painter.beginNativePainting();
-	glDisable(GL_CULL_FACE);
-	glDisable(GL_BLEND);
-	glBindVertexArray(vertex_array_object);
 	render(&painter);
-	painter.endNativePainting();
-	painter.drawText(-100, -100, "1234567890");
+
+	//painter.drawText(-100, -100, "1234567890");
 }
 
 PdfViewOpenGLWidget::PdfViewOpenGLWidget(DocumentView* document_view, PdfRenderer* pdf_renderer, ConfigManager* config_manager, bool is_helper, QWidget* parent) :
@@ -320,14 +316,20 @@ PdfViewOpenGLWidget::PdfViewOpenGLWidget(DocumentView* document_view, PdfRendere
 	this->setFormat(format);
 }
 
-void PdfViewOpenGLWidget::handle_escape() {
-	LOG("PdfViewOpenGLWidget::handle_escape");
+void PdfViewOpenGLWidget::cancel_search() {
+	LOG("PdfViewOpenGLWidget::cancel_search");
 	search_results.clear();
-	synctex_highlights.clear();
 	current_search_result_index =-1;
 	is_searching = false;
 	is_search_cancelled = true;
+}
+
+void PdfViewOpenGLWidget::handle_escape() {
+	LOG("PdfViewOpenGLWidget::handle_escape");
+	cancel_search();
+	synctex_highlights.clear();
 	should_highlight_links = false;
+	should_show_numbers = false;
 }
 
 void PdfViewOpenGLWidget::toggle_highlight_links() {
@@ -335,9 +337,10 @@ void PdfViewOpenGLWidget::toggle_highlight_links() {
 	this->should_highlight_links = !this->should_highlight_links;
 }
 
-void PdfViewOpenGLWidget::set_highlight_links(bool should_highlight) {
+void PdfViewOpenGLWidget::set_highlight_links(bool should_highlight, bool should_show_numbers) {
 	LOG("PdfViewOpenGLWidget::set_highlight_links");
 	this->should_highlight_links = should_highlight;
+	this->should_show_numbers = should_show_numbers;
 }
 
 int PdfViewOpenGLWidget::get_num_search_results() {
@@ -390,11 +393,20 @@ void PdfViewOpenGLWidget::render_overview(OverviewState overview) {
 
 	if (!valid_document()) return;
 
+	float zoom_level = document_view->get_zoom_level();
+
+	if (RERENDER_OVERVIEW) {
+		float view_width = document_view->get_view_width() * overview_half_width;
+		float page_width = document_view->get_document()->get_page_width(overview.page);
+		zoom_level = view_width / page_width;
+	}
+
 	GLuint texture = pdf_renderer->find_rendered_page(document_view->get_document()->get_path(),
 		overview.page,
-		document_view->get_zoom_level(),
+		zoom_level,
 		nullptr,
 		nullptr);
+
 
 	float page_vertices[4 * 2];
 	float border_vertices[4 * 2];
@@ -456,25 +468,22 @@ void PdfViewOpenGLWidget::render_overview(OverviewState overview) {
 		bind_program();
 
 		glBindTexture(GL_TEXTURE_2D, texture);
+
+		glEnableVertexAttribArray(0);
+		glEnableVertexAttribArray(1);
+		//draw the overview
+		glBindBuffer(GL_ARRAY_BUFFER, shared_gl_objects.vertex_buffer_object);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(page_vertices), page_vertices, GL_DYNAMIC_DRAW);
+
+		glBindBuffer(GL_ARRAY_BUFFER, shared_gl_objects.uv_buffer_object);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(page_uvs), page_uvs, GL_DYNAMIC_DRAW);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	}
-	else {
-		return;
-	}
-
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	//draw the overview
-	glBindBuffer(GL_ARRAY_BUFFER, shared_gl_objects.vertex_buffer_object);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(page_vertices), page_vertices, GL_DYNAMIC_DRAW);
-
-	glBindBuffer(GL_ARRAY_BUFFER, shared_gl_objects.uv_buffer_object);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(page_uvs), page_uvs, GL_DYNAMIC_DRAW);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 	//draw the border
 	glDisable(GL_BLEND);
@@ -537,6 +546,11 @@ void PdfViewOpenGLWidget::render_page(int page_number) {
 
 void PdfViewOpenGLWidget::render(QPainter* painter) {
 	LOG("PdfViewOpenGLWidget::render");
+
+	painter->beginNativePainting();
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glBindVertexArray(vertex_array_object);
 
 	if (!valid_document()) {
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -677,7 +691,7 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 
 	painter->endNativePainting();
 
-	if (should_highlight_links) {
+	if (should_highlight_links && should_show_numbers && (!overview_page)) {
 		for (int i = 0; i < all_visible_links.size(); i++) {
 			std::stringstream ss;
 			ss << i;

@@ -92,6 +92,7 @@ extern float DARK_MODE_BACKGROUND_COLOR[3] = { 0.0f, 0.0f, 0.0f };
 extern float CUSTOM_BACKGROUND_COLOR[3] = { 1.0f, 1.0f, 1.0f };
 extern float CUSTOM_TEXT_COLOR[3] = { 0.0f, 0.0f, 0.0f };
 std::wstring SEARCH_URLS[26];
+std::wstring EXECUTE_COMMANDS[26];
 extern std::wstring MIDDLE_CLICK_SEARCH_ENGINE = L"s";
 extern std::wstring SHIFT_MIDDLE_CLICK_SEARCH_ENGINE = L"l";
 extern float HIGHLIGHT_COLORS[26 * 3] = { \
@@ -147,11 +148,14 @@ extern bool SHOULD_LOAD_TUTORIAL_WHEN_NO_OTHER_FILE = false;
 extern bool SHOULD_LAUNCH_NEW_INSTANCE = true;
 extern bool SHOULD_DRAW_UNRENDERED_PAGES = true;
 extern bool HOVER_OVERVIEW = false;
+extern bool RERENDER_OVERVIEW = false;
+extern bool LINEAR_TEXTURE_FILTERING = false;
 extern float VISUAL_MARK_NEXT_PAGE_FRACTION = 0.25f;
 extern float VISUAL_MARK_NEXT_PAGE_THRESHOLD = 0.1f;
 extern std::wstring ITEM_LIST_PREFIX = L">";
 extern std::wstring STARTUP_COMMANDS = L"";
 extern float SMALL_PIXMAP_SCALE = 0.75f;
+extern float DISPLAY_RESOLUTION_SCALE = -1;
 
 extern Path default_config_path(L"");
 extern Path default_keys_path(L"");
@@ -307,7 +311,7 @@ int main(int argc, char* args[]) {
 #ifdef LOG_ENABLED
 	LOG_FILE = std::ofstream(LOG_FILE_NAME.c_str());
 #endif
-
+	
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
 	QApplication app(argc, args);
 

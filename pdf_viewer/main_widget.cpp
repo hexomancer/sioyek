@@ -60,6 +60,7 @@ extern std::wstring INVERSE_SEARCH_COMMAND;
 extern float VISUAL_MARK_NEXT_PAGE_FRACTION;
 extern float VISUAL_MARK_NEXT_PAGE_THRESHOLD;
 extern float SMALL_PIXMAP_SCALE;
+extern std::wstring EXECUTE_COMMANDS[26];
 
 extern Path default_config_path;
 extern Path default_keys_path;
@@ -72,6 +73,7 @@ extern std::wstring ITEM_LIST_PREFIX;
 extern std::wstring SEARCH_URLS[26];
 extern std::wstring MIDDLE_CLICK_SEARCH_ENGINE;
 extern std::wstring SHIFT_MIDDLE_CLICK_SEARCH_ENGINE;
+extern float DISPLAY_RESOLUTION_SCALE;
 
 bool MainWidget::main_document_view_has_document()
 {
@@ -270,7 +272,13 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 	inverse_search_command = INVERSE_SEARCH_COMMAND;
 	int first_screen_width = QApplication::desktop()->screenGeometry(0).width();
 
-	pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, QApplication::desktop()->devicePixelRatioF());
+	if (DISPLAY_RESOLUTION_SCALE <= 0){
+		pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, QApplication::desktop()->devicePixelRatioF());
+	}
+	else {
+		pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, DISPLAY_RESOLUTION_SCALE);
+
+	}
 	pdf_renderer->start_threads();
 
 
@@ -464,6 +472,25 @@ std::wstring MainWidget::get_status_string() {
 
 void MainWidget::handle_escape() {
 	LOG("MainWidget::handle_escape");
+
+	// add high escape priority to overview and search, if any of them are escaped, do not escape any further
+	if (opengl_widget) {
+		bool should_return = false;
+		if (opengl_widget->get_overview_page()) {
+			opengl_widget->set_overview_page({});
+			should_return = true;
+		}
+		else if (opengl_widget->get_is_searching(nullptr)) {
+			opengl_widget->cancel_search();
+			should_return = true;
+		}
+		if (should_return) {
+			validate_render();
+			setFocus();
+			return;
+		}
+	}
+
 	text_command_line_edit->setText("");
 	pending_link = {};
 	current_pending_command = nullptr;
@@ -869,6 +896,11 @@ void MainWidget::handle_command_with_symbol(const Command* command, char symbol)
 		//	selected_text.clear();
 		//}
 	}
+	else if (command->name == "execute_predefined_command" ) {
+		if ((symbol >= 'a') && (symbol <= 'z')) {
+			execute_command(EXECUTE_COMMANDS[symbol - 'a']);
+		}
+	}
 	else if (command->name == "goto_mark") {
 		assert(main_document_view);
 
@@ -1044,11 +1076,13 @@ void MainWidget::key_event(bool released, QKeyEvent* kevent) {
 	LOG("MainWidget::key_event");
 	validate_render();
 
-	if (kevent->key() == Qt::Key::Key_Escape) {
-		handle_escape();
-	}
 
 	if (released == false) {
+
+		if (kevent->key() == Qt::Key::Key_Escape) {
+			handle_escape();
+		}
+
 		std::vector<int> ignored_codes = {
 			Qt::Key::Key_Shift,
 			Qt::Key::Key_Control
@@ -1699,7 +1733,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 			should_fill_text_bar_with_selected_text = true;
 		}
 		if (command->name == "open_link") {
-			opengl_widget->set_highlight_links(true);
+			opengl_widget->set_highlight_links(true, true);
 		}
 		show_textbar(utf8_decode(command->name.c_str()), should_fill_text_bar_with_selected_text);
 		if (command->name == "chapter_search") {
@@ -1727,6 +1761,10 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 
 	if (command->name == "copy") {
 		copy_to_clipboard(selected_text);
+	}
+
+	if (command->name == "highlight_links") {
+		opengl_widget->set_highlight_links(true, false);
 	}
 
 	int rp = std::max(num_repeats, 1);
@@ -1827,11 +1865,13 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 	}
 
 	else if (command->name == "next_item") {
-		opengl_widget->goto_search_result(1 + num_repeats);
+		if (num_repeats == 0) num_repeats++;
+		opengl_widget->goto_search_result(num_repeats);
 	}
 
 	else if (command->name == "previous_item") {
-		opengl_widget->goto_search_result(-1 - num_repeats);
+		if (num_repeats == 0) num_repeats++;
+		opengl_widget->goto_search_result(-num_repeats);
 	}
 	else if (command->name == "push_state") {
 		push_state();
@@ -2285,30 +2325,7 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
 	}
 	if (current_pending_command->name == "execute") {
 
-		std::wstring file_path = main_document_view->get_document()->get_path();
-		QString qfile_path = QString::fromStdWString(file_path);
-		std::vector<std::wstring> path_parts;
-		split_path(file_path, path_parts);
-		std::wstring file_name = path_parts.back();
-		QString qfile_name = QString::fromStdWString(file_name);
-
-		QString qtext = QString::fromStdWString(text);
-
-		qtext.arg(qfile_path);
-
-		QStringList command_parts = qtext.split(QRegExp("\\s+"), QString::SkipEmptyParts);
-		if (command_parts.size() > 0) {
-			QString command_name = command_parts[0];
-			QStringList command_args;
-
-			command_parts.takeFirst();
-			for (int i = 0; i < command_parts.size(); i++) {
-				command_args.push_back(command_parts.at(i).arg(qfile_path, qfile_name));
-			}
-
-			run_command(command_name.toStdWString(), command_args.join(" ").toStdWString(), false);
-		}
-		//run_command(L"code", L"somesearchablefilename.java");
+		execute_command(text);
 	}
 
 	if (current_pending_command->name == "open_link") {
@@ -2339,7 +2356,7 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
 				long_jump_to_destination(page-1, offset_y);
 			}
 		}
-		opengl_widget->set_highlight_links(false);
+		opengl_widget->set_highlight_links(false, false);
 	}
 
 	if (current_pending_command->name == "goto_page_with_page_number") {
@@ -2550,4 +2567,47 @@ CommandManager* MainWidget::get_command_manager(){
 void MainWidget::toggle_dark_mode() {
 	LOG("MainWidget::toggle_dark_mode");
 	this->opengl_widget->toggle_dark_mode();
+}
+
+void MainWidget::execute_command(std::wstring command) {
+
+	std::wstring file_path = main_document_view->get_document()->get_path();
+	QString qfile_path = QString::fromStdWString(file_path);
+	std::vector<std::wstring> path_parts;
+	split_path(file_path, path_parts);
+	std::wstring file_name = path_parts.back();
+	QString qfile_name = QString::fromStdWString(file_name);
+
+	QString qtext = QString::fromStdWString(command);
+
+	qtext.arg(qfile_path);
+
+	QStringList command_parts = qtext.split(QRegExp("\\s+"), QString::SkipEmptyParts);
+	if (command_parts.size() > 0) {
+		QString command_name = command_parts[0];
+		QStringList command_args;
+
+		command_parts.takeFirst();
+
+		// you would think
+		// "command %2".arg("first", "second");
+		// would expand into
+		// "command second"
+		// and you would be wrong, for some reason qt decided the lowest numbered
+		// %n should be filled with the first argument and so on. what follows is a hack to get around this
+
+		for (int i = 0; i < command_parts.size(); i++) {
+			bool part_requires_only_second = (command_parts[i].arg("%1", "%2") != command_parts[i]);
+
+			if (part_requires_only_second) {
+				command_args.push_back(command_parts.at(i).arg(qfile_name));
+			}
+			else {
+				command_args.push_back(command_parts.at(i).arg(qfile_path, qfile_name));
+			}
+		}
+
+		run_command(command_name.toStdWString(), command_args.join(" ").toStdWString(), false);
+	}
+
 }
