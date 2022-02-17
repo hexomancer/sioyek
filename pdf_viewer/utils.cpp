@@ -609,14 +609,17 @@ void run_command(std::wstring command, std::wstring parameters, bool wait){
 	WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
 	CloseHandle(ShExecInfo.hProcess);
 #else
-	QProcess process;
+	QProcess* process = new QProcess;
 	QString qcommand = QString::fromStdWString(command);
 	QStringList qparameters; 
 	qparameters.append(QString::fromStdWString(parameters));
 
-	process.start(qcommand, qparameters);
+	process->start(qcommand, qparameters);
 	if (wait) {
-		process.waitForFinished();
+		process->waitForFinished();
+	}
+	else {
+		QObject::connect(process, SIGNAL(finished(int)), process, SLOT(deleteLater()));
 	}
 #endif
 
@@ -1435,5 +1438,30 @@ QString get_color_hexadecimal(float color) {
 
 QString get_color_qml_string(float r, float g, float b) {
 	QString res =  QString("#%1%2%3").arg(get_color_hexadecimal(r), get_color_hexadecimal(g), get_color_hexadecimal(b));
+	return res;
+}
+
+void copy_file(std::wstring src_path, std::wstring dst_path) {
+	std::ifstream  src(utf8_encode(src_path), std::ios::binary);
+	std::ofstream  dst(utf8_encode(src_path), std::ios::binary);
+
+	dst << src.rdbuf();
+}
+
+fz_quad quad_from_rect(fz_rect r)
+{
+	fz_quad q;
+	q.ul = fz_make_point(r.x0, r.y0);
+	q.ur = fz_make_point(r.x1, r.y0);
+	q.ll = fz_make_point(r.x0, r.y1);
+	q.lr = fz_make_point(r.x1, r.y1);
+	return q;
+}
+
+std::vector<fz_quad> quads_from_rects(const std::vector<fz_rect>& rects) {
+	std::vector<fz_quad> res;
+	for (auto rect : rects) {
+		res.push_back(quad_from_rect(rect));
+	}
 	return res;
 }
