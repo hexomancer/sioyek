@@ -74,9 +74,13 @@ extern std::wstring SEARCH_URLS[26];
 extern std::wstring MIDDLE_CLICK_SEARCH_ENGINE;
 extern std::wstring SHIFT_MIDDLE_CLICK_SEARCH_ENGINE;
 extern float DISPLAY_RESOLUTION_SCALE;
-
 extern float STATUS_BAR_COLOR[3];
 extern float STATUS_BAR_TEXT_COLOR[3];
+extern int MAIN_WINDOW_SIZE[2];
+extern int HELPER_WINDOW_SIZE[2];
+extern int MAIN_WINDOW_MOVE[2];
+extern int HELPER_WINDOW_MOVE[2];
+extern float TOUCHPAD_SENSITIVITY;
 
 bool MainWidget::main_document_view_has_document()
 {
@@ -912,6 +916,9 @@ void MainWidget::handle_command_with_symbol(const Command* command, char symbol)
 		}
 
 	}
+	else if (command->name == "set_select_highlight_type") {
+		select_highlight_type = symbol;
+	}
 	else if (command->name == "add_highlight") {
 		if (opengl_widget->selected_character_rects.size() > 0) {
 			main_document_view->add_highlight({ selection_begin_x, selection_begin_y }, { selection_end_x, selection_end_y }, symbol);
@@ -1515,6 +1522,9 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
 
 	if (mevent->button() == Qt::MouseButton::LeftButton) {
 		handle_left_click(mevent->pos().x(), mevent->pos().y(), false);
+		if (is_select_highlight_mode && (opengl_widget->selected_character_rects.size() > 0)) {
+			main_document_view->add_highlight({ selection_begin_x, selection_begin_y }, { selection_end_x, selection_end_y }, select_highlight_type);
+		}
 	}
 
 	if (mevent->button() == Qt::MouseButton::RightButton) {
@@ -1531,7 +1541,20 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
 		Qt::KeyboardModifiers modifiers = QGuiApplication::queryKeyboardModifiers();
 		bool is_shift_pressed = modifiers.testFlag(Qt::ShiftModifier);
 
+		float normal_x, normal_y;
+		main_document_view->window_to_normalized_window_pos(mevent->pos().x(), mevent->pos().y(), &normal_x, &normal_y);
 
+		// if overview page is open and we middle click on a paper name, search it in a search engine
+		if (opengl_widget->is_window_point_in_overview(normal_x, normal_y)) {
+			float doc_x, doc_y;
+			int doc_page;
+			opengl_widget->window_pos_to_overview_pos(normal_x, normal_y, &doc_x, &doc_y, &doc_page);
+			std::optional<std::wstring> paper_name = main_document_view->get_document()->get_paper_name_at_position(doc_page, doc_x, doc_y);
+			if (paper_name) {
+				handle_paper_name_on_pointer(paper_name.value(), is_shift_pressed);
+			}
+			return;
+		}
 		main_document_view->window_to_document_pos(mevent->pos().x(), mevent->pos().y(), &offset_x, &offset_y, &page);
 
 		fz_stext_page* stext_page = main_document_view->get_document()->get_stext_with_page_number(page);
@@ -1581,18 +1604,19 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
 
 		}
 		if (paper_name_on_pointer) {
-			if (paper_name_on_pointer.value().size() > 5) {
-				char type;
-				if (is_shift_pressed) {
-					type = SHIFT_MIDDLE_CLICK_SEARCH_ENGINE[0];
-				}
-				else {
-					type = MIDDLE_CLICK_SEARCH_ENGINE[0];
-				}
-				if ((type >= 'a') && (type <= 'z')) {
-					search_custom_engine(paper_name_on_pointer.value(), SEARCH_URLS[type - 'a']);
-				}
-			}
+			handle_paper_name_on_pointer(paper_name_on_pointer.value(), is_shift_pressed);
+			//if (paper_name_on_pointer.value().size() > 5) {
+			//	char type;
+			//	if (is_shift_pressed) {
+			//		type = SHIFT_MIDDLE_CLICK_SEARCH_ENGINE[0];
+			//	}
+			//	else {
+			//		type = MIDDLE_CLICK_SEARCH_ENGINE[0];
+			//	}
+			//	if ((type >= 'a') && (type <= 'z')) {
+			//		search_custom_engine(paper_name_on_pointer.value(), SEARCH_URLS[type - 'a']);
+			//	}
+			//}
 		}
 
 	}
@@ -1631,6 +1655,14 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
 	int num_repeats = 1;
 
 	const Command* command = nullptr;
+	bool is_touchpad = wevent->source() == Qt::MouseEventSource::MouseEventSynthesizedBySystem;
+	float vertical_move_amount = VERTICAL_MOVE_AMOUNT;
+	float horizontal_move_amount = HORIZONTAL_MOVE_AMOUNT;
+
+	if (is_touchpad) {
+		vertical_move_amount *= TOUCHPAD_SENSITIVITY;
+		horizontal_move_amount *= TOUCHPAD_SENSITIVITY;
+	}
 
 	bool is_control_pressed = QApplication::queryKeyboardModifiers().testFlag(Qt::ControlModifier);
 	bool is_shift_pressed = QApplication::queryKeyboardModifiers().testFlag(Qt::ShiftModifier);
@@ -1646,12 +1678,12 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
 		if (opengl_widget->is_window_point_in_overview(normal_x, normal_y)) {
 			if (wevent->angleDelta().y() > 0) {
 				OverviewState state = opengl_widget->get_overview_page().value();
-				state.offset_y -= 36.0f * VERTICAL_MOVE_AMOUNT;
+				state.offset_y -= 36.0f * vertical_move_amount;
 				opengl_widget->set_overview_page(state);
 			}
 			if (wevent->angleDelta().y() < 0) {
 				OverviewState state = opengl_widget->get_overview_page().value();
-				state.offset_y += 36.0f * VERTICAL_MOVE_AMOUNT;
+				state.offset_y += 36.0f * vertical_move_amount;
 				opengl_widget->set_overview_page(state);
 			}
 			validate_render();
@@ -1702,7 +1734,12 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
 	}
 
 	if (command) {
-		handle_command(command, abs(wevent->delta() / 120));
+		if (is_touchpad) {
+			handle_command(command, abs(wevent->delta() / 120 * TOUCHPAD_SENSITIVITY));
+		}
+		else {
+			handle_command(command, abs(wevent->delta() / 120));
+		}
 	}
 }
 
@@ -1732,19 +1769,26 @@ void MainWidget::toggle_two_window_mode() {
 		int window_width = QApplication::desktop()->screenGeometry(0).width();
 		int window_height = QApplication::desktop()->screenGeometry(0).height();
 
-		if (num_screens > 1) {
-
-			int second_window_width = QApplication::desktop()->screenGeometry(1).width();
-			int second_window_height = QApplication::desktop()->screenGeometry(1).height();
-
-			helper_window->resize(second_window_width, second_window_height);
-			helper_window->move(window_width, 0);
+		if ((HELPER_WINDOW_MOVE[0] != -1) && (HELPER_WINDOW_SIZE[0] != -1)) {
+			helper_window->resize(HELPER_WINDOW_SIZE[0], HELPER_WINDOW_SIZE[1]);
+			helper_window->move(HELPER_WINDOW_MOVE[0], HELPER_WINDOW_MOVE[1]);
 		}
 		else {
-			main_window->resize(window_width / 2, window_height);
-			helper_window->resize(window_width / 2, window_height);
-			main_window->move(0, 0);
-			helper_window->move(window_width/2, 0);
+			if (num_screens > 1) {
+
+				int second_window_width = QApplication::desktop()->screenGeometry(1).width();
+				int second_window_height = QApplication::desktop()->screenGeometry(1).height();
+
+				helper_window->resize(second_window_width, second_window_height);
+				helper_window->move(window_width, 0);
+			}
+			else {
+				main_window->resize(window_width / 2, window_height);
+				helper_window->resize(window_width / 2, window_height);
+				main_window->move(0, 0);
+				helper_window->move(window_width / 2, 0);
+			}
+
 		}
 		helper_window->show();
 
@@ -1792,8 +1836,39 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 		main_document_view->goto_end();
 	}
 
+	if (command->name == "toggle_select_highlight") {
+		is_select_highlight_mode = !is_select_highlight_mode;
+	}
 	if (command->name == "copy") {
 		copy_to_clipboard(selected_text);
+	}
+	if (command->name == "copy_window_size_config") {
+		QString config_string = "main_window_size    %1 %2\nmain_window_move     %3 %4\nhelper_window_size    %5 %6\nhelper_window_move     %7 %8";
+
+		QString main_window_size_w = QString::number(size().width());
+		QString main_window_size_h = QString::number(size().height());
+		QString helper_window_size_w = QString::number(-1);
+		QString helper_window_size_h = QString::number(-1);
+		QString main_window_move_x = QString::number(pos().x());
+		QString main_window_move_y = QString::number(pos().y());
+		QString helper_window_move_x = QString::number(-1);
+		QString helper_window_move_y = QString::number(-1);
+
+		if (helper_opengl_widget->isVisible()) {
+			helper_window_size_w = QString::number(helper_opengl_widget->size().width());
+			helper_window_size_h = QString::number(helper_opengl_widget->size().height());
+			helper_window_move_x = QString::number(helper_opengl_widget->pos().x());
+			helper_window_move_y = QString::number(helper_opengl_widget->pos().y());
+		}
+
+		copy_to_clipboard(config_string.arg(main_window_size_w,
+			main_window_size_h,
+			main_window_move_x,
+			main_window_move_y,
+			helper_window_size_w,
+			helper_window_size_h,
+			helper_window_move_x,
+			helper_window_move_y).toStdWString());
 	}
 
 	if (command->name == "highlight_links") {
@@ -2254,7 +2329,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 	}
 	else if (command->name == "embed_annotations") {
 		std::wstring embedded_pdf_file_name = select_new_pdf_file_name();
-		main_document_view->get_document()->embed_annotations(embedded_pdf_file_name);
+		if (embedded_pdf_file_name.size() > 0) {
+			main_document_view->get_document()->embed_annotations(embedded_pdf_file_name);
+		}
 	}
 	else if (command->name == "export") {
 		std::wstring export_file_name = select_new_json_file_name();
@@ -2645,6 +2722,21 @@ void MainWidget::execute_command(std::wstring command) {
 		}
 
 		run_command(command_name.toStdWString(), command_args.join(" ").toStdWString(), false);
+	}
+
+}
+void MainWidget::handle_paper_name_on_pointer(std::wstring paper_name, bool is_shift_pressed) {
+	if (paper_name.size() > 5) {
+		char type;
+		if (is_shift_pressed) {
+			type = SHIFT_MIDDLE_CLICK_SEARCH_ENGINE[0];
+		}
+		else {
+			type = MIDDLE_CLICK_SEARCH_ENGINE[0];
+		}
+		if ((type >= 'a') && (type <= 'z')) {
+			search_custom_engine(paper_name, SEARCH_URLS[type - 'a']);
+		}
 	}
 
 }

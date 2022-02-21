@@ -1,6 +1,12 @@
 # Sioyek
 
 Sioyek is a PDF viewer designed for reading research papers and technical books.
+## Contents
+* [Installation](#install)
+* [Documentation](#documentation)
+* [Video Demo](#feature-video-overview)
+* [Features](#features)
+* [Build Instructions](#build-instructions)
 
 ## Install
 ### Official packages
@@ -39,6 +45,12 @@ You can search and jump to table of contents entries.
 https://user-images.githubusercontent.com/6392321/125321419-e5ab5880-e351-11eb-9688-95374a22774f.mp4
 
 You can jump to any referenced figure or bibliography item *even if the PDF file doesn't provide links*. You can also search the names of bibliography items in google scholar/libgen by middle clicking/shif+middle clicking on their name.
+
+### Overview
+
+https://user-images.githubusercontent.com/6392321/154683015-0bae4f92-78e2-4141-8446-49dd7c2bd7c9.mp4
+
+You can open a quick overview of figures/references/tables/etc. by right clicking on them (Like Smart Jump, this feature works even if the document doesn't provide links).
 
 ### Mark
 

@@ -81,6 +81,9 @@ private:
 	bool is_word_selecting = false;
 	std::wstring selected_text;
 
+	bool is_select_highlight_mode = false;
+	char select_highlight_type = 'a';
+
 	std::optional<Link> link_to_edit = {};
 	int selected_highlight_index = -1;
 
@@ -115,6 +118,7 @@ private:
 
 protected:
 
+	void handle_paper_name_on_pointer(std::wstring paper_name, bool is_shift_pressed);
 	//void paintEvent(QPaintEvent* paint_event) override;
 	void resizeEvent(QResizeEvent* resize_event) override;
 	void mouseMoveEvent(QMouseEvent* mouse_event) override;

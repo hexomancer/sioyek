@@ -87,7 +87,7 @@ extern std::string LOG_FILE_NAME = "sioyek_log.txt";
 std::ofstream LOG_FILE;
 extern int FONT_SIZE = -1;
 extern int STATUS_BAR_FONT_SIZE = -1;
-extern std::string APPLICATION_VERSION = "1.0.0";
+extern std::string APPLICATION_VERSION = "1.1.0";
 extern float BACKGROUND_COLOR[3] = { 1.0f, 1.0f, 1.0f };
 extern float DARK_MODE_BACKGROUND_COLOR[3] = { 0.0f, 0.0f, 0.0f };
 extern float CUSTOM_BACKGROUND_COLOR[3] = { 1.0f, 1.0f, 1.0f };
@@ -158,6 +158,11 @@ extern std::wstring ITEM_LIST_PREFIX = L">";
 extern std::wstring STARTUP_COMMANDS = L"";
 extern float SMALL_PIXMAP_SCALE = 0.75f;
 extern float DISPLAY_RESOLUTION_SCALE = -1;
+extern int MAIN_WINDOW_SIZE[2] = { -1, -1 };
+extern int HELPER_WINDOW_SIZE[2] = { -1, -1 };
+extern int MAIN_WINDOW_MOVE[2] = { -1, -1 };
+extern int HELPER_WINDOW_MOVE[2] = { -1, -1 };
+extern float TOUCHPAD_SENSITIVITY = 1.0f;
 
 extern Path default_config_path(L"");
 extern Path default_keys_path(L"");
@@ -481,9 +486,31 @@ int main(int argc, char* args[]) {
 
 	int window_width = QApplication::desktop()->screenGeometry().width();
 	int window_height = QApplication::desktop()->screenGeometry().height();
+
+	bool should_maximize = false;
+
+	if ((MAIN_WINDOW_SIZE[0] == -1) || (MAIN_WINDOW_SIZE[0] == window_width)) {
+		should_maximize = true;
+	}
+
+	if (MAIN_WINDOW_SIZE[0] != -1) {
+		window_width = MAIN_WINDOW_SIZE[0];
+	}
+	if (MAIN_WINDOW_SIZE[1] != -1) {
+		window_height = MAIN_WINDOW_SIZE[1];
+	}
+
 	main_widget.resize(window_width, window_height);
 
-	main_widget.showMaximized();
+	if (should_maximize) {
+		main_widget.showMaximized();
+	}
+	else {
+		main_widget.show();
+		if (MAIN_WINDOW_MOVE[0] != -1) {
+			main_widget.move(MAIN_WINDOW_MOVE[0], MAIN_WINDOW_MOVE[1]);
+		}
+	}
 
 	main_widget.handle_args(app.arguments());
 
