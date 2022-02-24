@@ -115,6 +115,7 @@ private:
 	QTime last_text_select_time = QTime::currentTime();
 
 	bool main_document_view_has_document();
+	std::optional<std::string> get_last_opened_file_checksum();
 
 protected:
 
@@ -210,4 +211,7 @@ public:
 	bool find_location_of_text_under_pointer(int pointer_x, int pointer_y, int* out_page, float* out_offset);
 	std::optional<std::wstring> get_current_file_name();
 	CommandManager* get_command_manager();
+
+	void move_vertical(float amount);
+	void move_horizontal(float amount);
 };
