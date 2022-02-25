@@ -117,6 +117,8 @@ private:
 	bool main_document_view_has_document();
 	std::optional<std::string> get_last_opened_file_checksum();
 
+	void open_document(const std::wstring& doc_path, bool* invalid_flag, bool load_prev_state = true, std::optional<OpenedBookState> prev_state = {}, bool foce_load_dimensions=false);
+
 protected:
 
 	void handle_paper_name_on_pointer(std::wstring paper_name, bool is_shift_pressed);
@@ -155,6 +157,7 @@ protected:
 	void wheelEvent(QWheelEvent* wevent) override;
 	void show_textbar(const std::wstring& command_name, bool should_fill_with_selected_text = false);
 	void toggle_two_window_mode();
+	void toggle_window_configuration();
 	void handle_command_types(const Command* command, int num_repeats);
 	void handle_link();
 	void handle_pending_text_command(std::wstring text);
@@ -166,6 +169,9 @@ protected:
 	void execute_command(std::wstring command);
 	QString get_status_stylesheet();
 	int get_status_bar_height();
+
+	QRect get_main_window_rect();
+	QRect get_helper_window_rect();
 
 public:
 
@@ -214,4 +220,16 @@ public:
 
 	void move_vertical(float amount);
 	void move_horizontal(float amount);
+	void get_window_params_for_one_window_mode(int* main_window_size, int* main_window_move);
+	void get_window_params_for_two_window_mode(int* main_window_size, int* main_window_move, int* helper_window_size, int* helper_window_move);
+	void apply_window_params_for_one_window_mode();
+	void apply_window_params_for_two_window_mode();
+	//void get_desired_window_size_and_location(int* main_window_width,
+	//	int* main_window_height,
+	//	int* main_window_pos_x,
+	//	int* main_window_pos_y,
+	//	int* helper_window_width,
+	//	int* helper_window_height,
+	//	int* helper_window_pos_x,
+	//	int* helper_window_pos_y);
 };
