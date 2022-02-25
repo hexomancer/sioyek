@@ -129,6 +129,7 @@ public:
 	Logger(std::string name);
 	~Logger();
 };
+#define LOG_ENABLED
 
 #ifdef LOG_ENABLED
 #define LOG(name) Logger _ = Logger(name);
