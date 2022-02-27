@@ -106,6 +106,7 @@ void MainWidget::resizeEvent(QResizeEvent* resize_event) {
 		int status_bar_height = get_status_bar_height();
 		status_label->move(0, main_window_height - status_bar_height);
 		status_label->resize(main_window_width, status_bar_height);
+		status_label->show();
 	}
 
 	if ((main_document_view->get_document() != nullptr) && (main_document_view->get_zoom_level() == 0)) {
@@ -302,6 +303,10 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 	helper_document_view = new DocumentView(mupdf_context, db_manager, document_manager, config_manager, checksummer);
 	helper_opengl_widget = new PdfViewOpenGLWidget(helper_document_view, pdf_renderer, config_manager, true);
 
+	status_label = new QLabel(this);
+	status_label->setStyleSheet(get_status_stylesheet());
+	status_label->setFont(QFont("Monaco"));
+
 	// automatically open the helper window in second monitor
 	int num_screens = QApplication::desktop()->numScreens();
 	if ((num_screens > 1) && SHOULD_USE_MULTIPLE_MONITORS) {
@@ -316,12 +321,6 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 	helper_opengl_widget->register_on_link_edit_listener([this](OpenedBookState state) {
 		this->update_closest_link_with_opened_book_state(state);
 		});
-
-	status_label = new QLabel(this);
-
-	status_label->setStyleSheet(get_status_stylesheet());
-	status_label->setFont(QFont("Monaco"));
-
 
 	text_command_line_edit_container = new QWidget(this);
 	text_command_line_edit_container->setStyleSheet("background-color: black; color: white; border: none;");
@@ -1778,6 +1777,13 @@ void MainWidget::show_textbar(const std::wstring& command_name, bool should_fill
 	text_command_line_edit->setFocus();
 }
 
+bool MainWidget::helper_window_overlaps_main_window() {
+
+	QRect main_window_rect = get_main_window_rect();
+	QRect helper_window_rect = get_helper_window_rect();
+	QRect intersection = main_window_rect.intersected(helper_window_rect);
+	return intersection.width() > 50;
+}
 
 void MainWidget::toggle_window_configuration() {
 
@@ -1789,10 +1795,7 @@ void MainWidget::toggle_window_configuration() {
 	}
 	else {
 		apply_window_params_for_two_window_mode();
-		QRect main_window_rect = get_main_window_rect();
-		QRect helper_window_rect = get_helper_window_rect();
-		QRect intersection = main_window_rect.intersected(helper_window_rect);
-		if (intersection.width() > 0) {
+		if (helper_window_overlaps_main_window()) {
 			helper_window->activateWindow();
 		}
 		else {
@@ -1813,34 +1816,40 @@ void MainWidget::toggle_two_window_mode() {
 
 	if (helper_opengl_widget->isHidden()) {
 		//helper_opengl_widget->show();
-		int num_screens = QApplication::desktop()->numScreens();
-		int window_width = QApplication::desktop()->screenGeometry(0).width();
-		int window_height = QApplication::desktop()->screenGeometry(0).height();
+		//int num_screens = QApplication::desktop()->numScreens();
+		//int window_width = QApplication::desktop()->screenGeometry(0).width();
+		//int window_height = QApplication::desktop()->screenGeometry(0).height();
 
-		if ((HELPER_WINDOW_MOVE[0] != -1) && (HELPER_WINDOW_SIZE[0] != -1)) {
-			helper_window->resize(HELPER_WINDOW_SIZE[0], HELPER_WINDOW_SIZE[1]);
-			helper_window->move(HELPER_WINDOW_MOVE[0], HELPER_WINDOW_MOVE[1]);
-		}
-		else {
-			if (num_screens > 1) {
+		//if ((HELPER_WINDOW_MOVE[0] != -1) && (HELPER_WINDOW_SIZE[0] != -1)) {
+		//	helper_window->resize(HELPER_WINDOW_SIZE[0], HELPER_WINDOW_SIZE[1]);
+		//	helper_window->move(HELPER_WINDOW_MOVE[0], HELPER_WINDOW_MOVE[1]);
+		//}
+		//else {
+		//	if (num_screens > 1) {
 
-				int second_window_width = QApplication::desktop()->screenGeometry(1).width();
-				int second_window_height = QApplication::desktop()->screenGeometry(1).height();
+		//		int second_window_width = QApplication::desktop()->screenGeometry(1).width();
+		//		int second_window_height = QApplication::desktop()->screenGeometry(1).height();
 
-				helper_window->resize(second_window_width, second_window_height);
-				helper_window->move(window_width, 0);
-			}
-			else {
-				main_window->resize(window_width / 2, window_height);
-				helper_window->resize(window_width / 2, window_height);
-				main_window->move(0, 0);
-				helper_window->move(window_width / 2, 0);
-			}
+		//		helper_window->resize(second_window_width, second_window_height);
+		//		helper_window->move(window_width, 0);
+		//	}
+		//	else {
+		//		main_window->resize(window_width / 2, window_height);
+		//		helper_window->resize(window_width / 2, window_height);
+		//		main_window->move(0, 0);
+		//		helper_window->move(window_width / 2, 0);
+		//	}
 
-		}
+		//}
+		QPoint pos = helper_opengl_widget->pos();
+		QSize size = helper_opengl_widget->size();
 		helper_window->show();
+		helper_window->resize(size);
+		helper_window->move(pos);
 
-		activateWindow();
+		if (!helper_window_overlaps_main_window()) {
+			activateWindow();
+		}
 	}
 	else {
 		helper_window->hide();
@@ -2353,9 +2362,11 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 	}
 	else if (command->name == "toggle_dark_mode") {
 		this->opengl_widget->toggle_dark_mode();
+		helper_opengl_widget->toggle_dark_mode();
 	}
 	else if (command->name == "toggle_custom_color") {
 		this->opengl_widget->toggle_custom_color_mode();
+		helper_opengl_widget->toggle_custom_color_mode();
 	}
 	else if (command->name == "quit" || command->name == "q") {
 		persist();
@@ -2833,7 +2844,7 @@ std::optional<std::string> MainWidget::get_last_opened_file_checksum() {
 	return {};
 }
 void MainWidget::get_window_params_for_one_window_mode(int* main_window_size, int* main_window_move){
-	if (SINGLE_MAIN_WINDOW_MOVE[0] >= 0) {
+	if (SINGLE_MAIN_WINDOW_SIZE[0] >= 0) {
 		main_window_size[0] = SINGLE_MAIN_WINDOW_SIZE[0];
 		main_window_size[1] = SINGLE_MAIN_WINDOW_SIZE[1];
 		main_window_move[0] = SINGLE_MAIN_WINDOW_MOVE[0];
@@ -2849,7 +2860,7 @@ void MainWidget::get_window_params_for_one_window_mode(int* main_window_size, in
 	}
 }
 void MainWidget::get_window_params_for_two_window_mode(int* main_window_size, int* main_window_move, int* helper_window_size, int* helper_window_move) {
-	if (MAIN_WINDOW_MOVE[0] >= 0) {
+	if (MAIN_WINDOW_SIZE[0] >= 0) {
 		main_window_size[0] = MAIN_WINDOW_SIZE[0];
 		main_window_size[1] = MAIN_WINDOW_SIZE[1];
 		main_window_move[0] = MAIN_WINDOW_MOVE[0];
@@ -2908,6 +2919,8 @@ void MainWidget::apply_window_params_for_one_window_mode(){
 
 	if (helper_opengl_widget != nullptr) {
 		helper_opengl_widget->hide();
+		helper_opengl_widget->move(0, 0);
+		helper_opengl_widget->resize(main_window_size[0], main_window_size[1]);
 	}
 }
 
