@@ -51,6 +51,7 @@ extern float PAGE_SEPARATOR_WIDTH;
 extern float PAGE_SEPARATOR_COLOR[3];
 extern int SINGLE_MAIN_WINDOW_SIZE[2];
 extern int SINGLE_MAIN_WINDOW_MOVE[2];
+extern float FIT_TO_PAGE_WIDTH_RATIO;
 
 template<typename T>
 void* generic_deserializer(std::wstringstream& stream, void* res_) {
@@ -185,7 +186,7 @@ ConfigManager::ConfigManager(const Path& default_path, const std::vector<Path>& 
 	configs.push_back({ L"page_separator_color", PAGE_SEPARATOR_COLOR, vec3_serializer, vec3_deserializer });
 	configs.push_back({ L"single_main_window_size", &SINGLE_MAIN_WINDOW_SIZE, ivec2_serializer, ivec2_deserializer });
 	configs.push_back({ L"single_main_window_move", &SINGLE_MAIN_WINDOW_MOVE, ivec2_serializer, ivec2_deserializer });
-
+	configs.push_back({ L"fit_to_page_width_ratio", &FIT_TO_PAGE_WIDTH_RATIO, float_serializer, float_deserializer });
 
 	//configs.push_back({ L"auto_embed_annotations", &AUTO_EMBED_ANNOTATIONS, bool_serializer, bool_deserializer });
 
@@ -261,4 +262,14 @@ std::optional<Path> ConfigManager::get_or_create_user_config_file() {
 	user_config_paths.back().file_parent().create_directories();
 	create_file_if_not_exists(user_config_paths.back().get_path());
 	return user_config_paths.back();
+}
+
+std::vector<Path> ConfigManager::get_all_user_config_files(){
+	std::vector<Path> res;
+	for (int i = user_config_paths.size() - 1; i >= 0; i--) {
+		if (user_config_paths[i].file_exists()) {
+			res.push_back(user_config_paths[i]);
+		}
+	}
+	return  res;
 }

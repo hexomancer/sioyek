@@ -377,15 +377,17 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 				// Wait until a safe amount of time has passed since the last time the file was updated on the filesystem
 				// this is because LaTeX software frequently puts PDF files in an invalid state while it is being made in
 				// multiple passes.
+
 				if ((doc->get_milies_since_last_edit_time() < (2 * INTERVAL_TIME)) &&
 					doc->get_milies_since_last_edit_time() > INTERVAL_TIME &&
 					doc->get_milies_since_last_document_update_time() > doc->get_milies_since_last_edit_time()
 					) {
+
+				//if (doc->get_milies_since_last_document_update_time() > doc->get_milies_since_last_edit_time()) {
 					std::wcout << L"calling\n";
 					doc->reload();
 					pdf_renderer->clear_cache();
-					validate_render();
-					validate_ui();
+					invalidate_render();
 				}
 			}
 		}
@@ -830,7 +832,11 @@ void MainWidget::handle_args(const QStringList& arguments) {
 	}
 
 	if (parser->isSet("page")) {
-		page = parser->value("page").toInt();
+
+		int page_int = parser->value("page").toInt();
+		// 1 is the index for the first page (not 0)
+		if (page_int > 0) page_int--;
+		page = page_int;
 	}
 
 	if (parser->isSet("zoom")) {
@@ -998,6 +1004,7 @@ void MainWidget::open_document(const Path& path, std::optional<float> offset_x, 
 		update_history_state();
 	}
 
+	main_document_view->on_view_size_change(main_window_width, main_window_height);
 	main_document_view->open_document(path.get_path(), &this->is_render_invalidated);
 	bool has_document = main_document_view_has_document();
 
@@ -1016,7 +1023,6 @@ void MainWidget::open_document(const Path& path, std::optional<float> offset_x, 
 	if ((path.get_path().size() > 0) && (!has_document)) {
 		show_error_message(L"Could not open file: " + path.get_path());
 	}
-	main_document_view->on_view_size_change(main_window_width, main_window_height);
 
 	if (offset_x) {
 		main_document_view->set_offset_x(offset_x.value());
@@ -1456,6 +1462,11 @@ void MainWidget::set_main_document_view_state(DocumentViewState new_view_state) 
 
 void MainWidget::handle_click(int pos_x, int pos_y) {
 	LOG("MainWidget::handle_click");
+
+	if (!main_document_view_has_document()) {
+		return;
+	}
+
 	auto link_ = main_document_view->get_link_in_pos(pos_x, pos_y);
 	selected_highlight_index = main_document_view->get_highlight_index_in_pos(pos_x, pos_y);
 
@@ -1551,6 +1562,10 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
 	}
 
 	if (mevent->button() == Qt::MouseButton::MiddleButton) {
+
+		if (!main_document_view_has_document()) {
+			return;
+		}
 
 		int page;
 		float offset_x, offset_y;
@@ -2016,6 +2031,10 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 		main_document_view->fit_to_page_width();
 		last_smart_fit_page = {};
 	}
+	else if (command->name == "fit_to_page_width_ratio") {
+		main_document_view->fit_to_page_width(false, true);
+		last_smart_fit_page = {};
+	}
 	else if (command->name == "fit_to_page_width_smart") {
 		main_document_view->fit_to_page_width(true);
 		int current_page = main_document_view->get_current_page_number();
@@ -2395,6 +2414,44 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 		if (pref_file_path) {
 			open_file(pref_file_path.value().get_path());
 		}
+	}
+	else if (command->name == "prefs_user_all") {
+
+		std::vector<Path> prefs_paths = config_manager->get_all_user_config_files();
+		std::vector<std::wstring> prefs_paths_wstring;
+		for (auto path : prefs_paths) {
+			prefs_paths_wstring.push_back(path.get_path());
+		}
+
+		set_current_widget(new FilteredSelectWindowClass<std::wstring>(
+			prefs_paths_wstring,
+			prefs_paths_wstring,
+			[&](std::wstring* path) {
+				if (path) {
+					open_file(*path);
+				}
+			},
+				this));
+		current_widget->show();
+	}
+	else if (command->name == "keys_user_all") {
+
+		std::vector<Path> keys_paths = input_handler->get_all_user_keys_paths();
+		std::vector<std::wstring> keys_paths_wstring;
+		for (auto path : keys_paths) {
+			keys_paths_wstring.push_back(path.get_path());
+		}
+
+		set_current_widget(new FilteredSelectWindowClass<std::wstring>(
+			keys_paths_wstring,
+			keys_paths_wstring,
+			[&](std::wstring* path) {
+				if (path) {
+					open_file(*path);
+				}
+			},
+				this));
+		current_widget->show();
 	}
 	else if (command->name == "embed_annotations") {
 		std::wstring embedded_pdf_file_name = select_new_pdf_file_name();
