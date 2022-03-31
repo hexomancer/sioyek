@@ -26,7 +26,6 @@
 extern float VERTICAL_MOVE_AMOUNT;
 extern float HORIZONTAL_MOVE_AMOUNT;
 
-
 class MainWidget : public QWidget, ConfigFileChangeListener{
 
 private:
@@ -163,12 +162,16 @@ protected:
 	void handle_pending_text_command(std::wstring text);
 	void toggle_fullscreen();
 	void toggle_presentation_mode();
-	void complete_pending_link(const LinkViewState& destination_view_state);
+    void toggle_synctex_mode();
+    void complete_pending_link(const LinkViewState& destination_view_state);
 	void long_jump_to_destination(int page, float offset_x, float offset_y);
 	void long_jump_to_destination(int page, float offset_y);
 	void execute_command(std::wstring command);
 	QString get_status_stylesheet();
 	int get_status_bar_height();
+    void smart_jump_under_pos(int pos_x, int pos_y);
+    bool overview_under_pos(int pos_x, int pos_y);
+    void visual_mark_under_pos(int pos_x, int pos_y);
 
 	QRect get_main_window_rect();
 	QRect get_helper_window_rect();
