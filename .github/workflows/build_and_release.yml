@@ -1,17 +1,88 @@
 
 name: Build Release
 
-on:
-  push:
-    tags:
-      - "v*"
+on: 
+  push
   pull_request:
     branches:
       - "*"
 
 jobs:
+  upload-pre-release:
+    if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, "v") }}
+    runs-on: ubuntu-18.04
+    needs: [build-mac, build-linux, build-windows, build-linux-portable, build-windows-portable]
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: create release
+      id: create_pre_release
+      uses: actions/create-release@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+      with:
+        tag_name: ${{ github.run_id }}
+        release_name: Release ${{ github.run_id }}
+        draft: false
+        prerelease: true
+    - name: download artifacts
+      uses: actions/download-artifact@v1
+      with:
+        name: uploads     
+    - name: upload pre mac
+      id: upload-pre-mac
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./uploads/sioyek-release-mac.zip
+        asset_name: sioyek-pre-release-mac.zip
+        asset_content_type: application/zip   
+
+    - name: upload pre linux
+      id: upload-pre-linux
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./uploads/sioyek-release-linux.zip
+        asset_name: sioyek-pre-release-linux.zip
+        asset_content_type: application/zip   
+    - name: upload windows
+      id: upload-pre-windows
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./uploads/sioyek-release-windows.zip
+        asset_name: sioyek-pre-release-windows.zip
+        asset_content_type: application/zip
+    - name: upload linux-portable
+      id: upload-pre-linux-portable
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./uploads/sioyek-release-linux-portable.zip
+        asset_name: sioyek-pre-release-linux-portable.zip
+        asset_content_type: application/zip   
+    - name: upload windows-portable
+      id: upload-pre-windows-portable
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./uploads/sioyek-release-windows-portable.zip
+        asset_name: sioyek-pre-release-windows-portable.zip
+        asset_content_type: application/zip
+
   upload-release:
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ github.event_name != 'pull_request' && startsWith(github.ref, "v") }}
     runs-on: ubuntu-18.04
     needs: [build-mac, build-linux, build-windows, build-linux-portable, build-windows-portable]
 
