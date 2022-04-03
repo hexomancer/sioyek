@@ -37,7 +37,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./uploads/sioyek-release-mac.zip
-        asset_name: sioyek-pre-release-mac.zip
+        asset_name: sioyek-release-mac.zip
         asset_content_type: application/zip   
 
     - name: upload pre linux
@@ -48,7 +48,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./uploads/sioyek-release-linux.zip
-        asset_name: sioyek-pre-release-linux.zip
+        asset_name: sioyek-release-linux.zip
         asset_content_type: application/zip   
     - name: upload windows
       id: upload-pre-windows
@@ -58,7 +58,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./uploads/sioyek-release-windows.zip
-        asset_name: sioyek-pre-release-windows.zip
+        asset_name: sioyek-release-windows.zip
         asset_content_type: application/zip
     - name: upload linux-portable
       id: upload-pre-linux-portable
@@ -68,7 +68,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./uploads/sioyek-release-linux-portable.zip
-        asset_name: sioyek-pre-release-linux-portable.zip
+        asset_name: sioyek-release-linux-portable.zip
         asset_content_type: application/zip   
     - name: upload windows-portable
       id: upload-pre-windows-portable
@@ -78,7 +78,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./uploads/sioyek-release-windows-portable.zip
-        asset_name: sioyek-pre-release-windows-portable.zip
+        asset_name: sioyek-release-windows-portable.zip
         asset_content_type: application/zip
 
   upload-release:
