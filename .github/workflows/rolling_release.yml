@@ -5,6 +5,7 @@ on: push
 
 jobs:
   upload-release:
+    if: ${{ !startsWith(github.ref, "v") }}
     runs-on: ubuntu-18.04
     needs: [build-mac, build-linux, build-windows, build-linux-portable, build-windows-portable]
 
