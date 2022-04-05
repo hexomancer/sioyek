@@ -220,7 +220,7 @@ public:
 	void update_link_with_opened_book_state(Link lnk, const OpenedBookState& new_state);
 	void update_closest_link_with_opened_book_state(const OpenedBookState& new_state);
 	void set_current_widget(QWidget* new_widget);
-	float get_ith_next_line_from_absolute_y(float absolute_y, int i, bool cont);
+	void get_ith_next_line_from_absolute_y(float absolute_y, int i, bool cont, float* out_begin, float* out_end);
 	bool focus_on_visual_mark_pos(bool moving_down);
 	void toggle_visual_scroll_mode();
 	void set_overview_link(PdfLink link);
@@ -236,12 +236,12 @@ public:
 	void apply_window_params_for_one_window_mode();
 	void apply_window_params_for_two_window_mode();
 	bool helper_window_overlaps_main_window();
-	//void get_desired_window_size_and_location(int* main_window_width,
-	//	int* main_window_height,
-	//	int* main_window_pos_x,
-	//	int* main_window_pos_y,
-	//	int* helper_window_width,
-	//	int* helper_window_height,
-	//	int* helper_window_pos_x,
-	//	int* helper_window_pos_y);
+	void highlight_words();
+
+	std::vector<fz_rect> get_flat_words();
+	float document_to_absolute_y(int page, float doc_x, float doc_y);
+
+	fz_rect get_tag_rect(std::string tag);
+	fz_irect get_tag_window_rect(std::string tag);
+
 };

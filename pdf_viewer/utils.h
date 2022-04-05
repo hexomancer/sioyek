@@ -107,7 +107,8 @@ char* get_argv_value(int argc, char** argv, std::string key);
 void split_root_file(QString path, QString& out_root, QString& out_partial);
 QString expand_home_dir(QString path);
 std::vector<unsigned int> get_max_width_histogram_from_pixmap(fz_pixmap* pixmap);
-std::vector<unsigned int> get_line_ends_from_histogram(std::vector<unsigned int> histogram);
+//std::vector<unsigned int> get_line_ends_from_histogram(std::vector<unsigned int> histogram);
+void get_line_begins_and_ends_from_histogram(std::vector<unsigned int> histogram, std::vector<unsigned int>& begins, std::vector<unsigned int>& ends);
 
 template<typename T>
 int find_nth_larger_element_in_sorted_list(std::vector<T> sorted_list, T value, int n) {
@@ -144,3 +145,6 @@ void copy_file(std::wstring src_path, std::wstring dst_path);
 fz_quad quad_from_rect(fz_rect r);
 std::vector<fz_quad> quads_from_rects(const std::vector<fz_rect>& rects);
 std::wifstream open_wifstream(const std::wstring& file_name);
+void get_flat_words_from_flat_chars(const std::vector<fz_stext_char*>& flat_chars, std::vector<fz_rect>& flat_word_rects);
+std::vector<std::string> get_tags(int n);
+int get_index_from_tag(const std::string& tag);

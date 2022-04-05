@@ -13,6 +13,7 @@ extern bool SHOULD_DRAW_UNRENDERED_PAGES;
 extern float CUSTOM_BACKGROUND_COLOR[3];
 extern float CUSTOM_TEXT_COLOR[3];
 extern bool RERENDER_OVERVIEW;
+extern bool RULER_MODE;
 extern float PAGE_SEPARATOR_WIDTH;
 extern float PAGE_SEPARATOR_COLOR[3];
 
@@ -205,7 +206,7 @@ void PdfViewOpenGLWidget::resizeGL(int w, int h) {
 	}
 }
 
-void PdfViewOpenGLWidget::render_line_window(GLuint program, float gl_vertical_pos) {
+void PdfViewOpenGLWidget::render_line_window(GLuint program, float gl_vertical_pos, float gl_vertical_begin_pos) {
 	LOG("PdfViewOpenGLWidget::render_line_window");
 
 
@@ -216,6 +217,13 @@ void PdfViewOpenGLWidget::render_line_window(GLuint program, float gl_vertical_p
 		1, gl_vertical_pos,
 		-1, gl_vertical_pos - bar_height,
 		1, gl_vertical_pos - bar_height
+	};
+
+	float top_bar_data[] = {
+		-1, gl_vertical_begin_pos + bar_height,
+		1, gl_vertical_begin_pos + bar_height,
+		-1, gl_vertical_begin_pos,
+		1, gl_vertical_begin_pos  
 	};
 
 	glDisable(GL_CULL_FACE);
@@ -240,6 +248,11 @@ void PdfViewOpenGLWidget::render_line_window(GLuint program, float gl_vertical_p
 	glBindBuffer(GL_ARRAY_BUFFER, shared_gl_objects.vertex_buffer_object);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(bar_data), bar_data, GL_DYNAMIC_DRAW);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	if (RULER_MODE) {
+		glBufferData(GL_ARRAY_BUFFER, sizeof(top_bar_data), top_bar_data, GL_DYNAMIC_DRAW);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	}
 
 	glDisableVertexAttribArray(0);
 	glDisableVertexAttribArray(1);
@@ -336,6 +349,7 @@ void PdfViewOpenGLWidget::handle_escape() {
 	cancel_search();
 	synctex_highlights.clear();
 	should_highlight_links = false;
+	should_highlight_words = false;
 	should_show_numbers = false;
 }
 
@@ -690,6 +704,10 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 				&selection_end_window_x,
 				&selection_end_window_y);
 
+			if (selection_begin_window_y > selection_end_window_y) {
+				std::swap(selection_begin_window_y, selection_end_window_y);
+			}
+
 			bool is_selection_in_window = range_intersects(selection_begin_window_y, selection_end_window_y, -1.0f, 1.0f);
 
 			if (is_selection_in_window) {
@@ -704,11 +722,14 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 	if (should_draw_vertical_line) {
 		//render_line_window(shared_gl_objects.vertical_line_program ,vertical_line_location);
 
+		float vertical_line_begin, vertical_line_end;
+		document_view->get_vertical_line_window_y(&vertical_line_begin, &vertical_line_end);
+
 		if (color_mode == ColorPalette::Dark) {
-			render_line_window(shared_gl_objects.vertical_line_dark_program , document_view->get_vertical_line_window_y());
+			render_line_window(shared_gl_objects.vertical_line_dark_program , vertical_line_end, vertical_line_begin);
 		}
 		else {
-			render_line_window(shared_gl_objects.vertical_line_program , document_view->get_vertical_line_window_y());
+			render_line_window(shared_gl_objects.vertical_line_program , vertical_line_end, vertical_line_begin);
 		}
 	}
 	if (overview_page) {
@@ -717,6 +738,37 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 
 	painter->endNativePainting();
 
+	if (should_highlight_words && (!overview_page)) {
+
+		QBrush background_brush = QBrush(QColor(236, 200, 0));
+		QFont font;
+		font.setPixelSize(20);
+
+		painter->setBackgroundMode(Qt::BGMode::OpaqueMode);
+		painter->setBackground(background_brush);
+		painter->setPen(QColor(0, 0, 128));
+		painter->setFont(font);
+
+		std::vector<std::string> tags = get_tags(word_rects.size());
+
+		for (int i = 0; i < word_rects.size(); i++) {
+
+			auto [rect, page] = word_rects[i];
+
+			fz_rect window_rect = document_view->document_to_window_rect(page, rect);
+
+			int view_width = static_cast<float>(document_view->get_view_width());
+			int view_height = static_cast<float>(document_view->get_view_height());
+			
+			int window_x0 = static_cast<int>(window_rect.x0 * view_width / 2 + view_width / 2);
+			int window_y0 = static_cast<int>(-window_rect.y0 * view_height / 2 + view_height / 2);
+
+			int window_x1 = static_cast<int>(window_rect.x1 * view_width / 2 + view_width / 2);
+			int window_y1 = static_cast<int>(-window_rect.y1 * view_height / 2 + view_height / 2);
+
+			painter->drawText(window_x0, (window_y0 + window_y1) / 2, tags[i].c_str());
+		}
+	}
 	if (should_highlight_links && should_show_numbers && (!overview_page)) {
 		for (int i = 0; i < all_visible_links.size(); i++) {
 			std::stringstream ss;
@@ -1172,4 +1224,16 @@ void PdfViewOpenGLWidget::window_pos_to_overview_pos(float window_x_normal, floa
 	*doc_offset_x = relative_window_x;
 	*doc_offset_y = overview_page.value().offset_y + relative_window_y;
 	*doc_page = get_overview_page().value().page;
+}
+
+void PdfViewOpenGLWidget::toggle_highlight_words() {
+	this->should_highlight_words = !this->should_highlight_words;
+}
+
+void PdfViewOpenGLWidget::set_highlight_words(std::vector<std::pair<fz_rect, int>>& rects) {
+	word_rects = std::move(rects);
+}
+
+void PdfViewOpenGLWidget::set_should_highlight_words(bool should_highlight) {
+	this->should_highlight_words = should_highlight;
 }

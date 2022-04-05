@@ -530,6 +530,8 @@ void MainWidget::handle_escape() {
     }
     if (opengl_widget) {
         opengl_widget->set_overview_page({});
+		opengl_widget->selected_character_rects.clear();
+		selected_text.clear();
     }
 
     text_command_line_edit_container->hide();
@@ -1687,6 +1689,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         if (command->name == "open_link") {
             opengl_widget->set_highlight_links(true, true);
         }
+        if ((command->name == "keyboard_select") || (command->name == "keyboard_smart_jump") || (command->name == "keyboard_overview")) {
+            highlight_words();
+        }
         show_textbar(utf8_decode(command->name.c_str()), should_fill_text_bar_with_selected_text);
         if (command->name == "chapter_search") {
             std::optional<std::pair<int, int>> chapter_range = main_document_view->get_current_page_range();
@@ -2269,6 +2274,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         db_manager->import_json(import_file_name, checksummer);
     }
     else if (command->name == "debug") {
+		highlight_words();
     }
     else if (command->name == "smart_jump_under_cursor") {
         QPoint mouse_pos = mapFromGlobal(QCursor::pos());
@@ -2292,8 +2298,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         horizontal_scroll_locked = !horizontal_scroll_locked;
     }
     else if (command->name == "move_visual_mark_down") {
-        float new_pos = get_ith_next_line_from_absolute_y(main_document_view->get_vertical_line_pos(), 2, true);
-        main_document_view->set_vertical_line_pos(new_pos);
+		float new_pos, new_begin_pos;
+        get_ith_next_line_from_absolute_y(main_document_view->get_vertical_line_end_pos(), 2, true, &new_begin_pos, &new_pos);
+        main_document_view->set_vertical_line_pos(new_pos, new_begin_pos);
         if (focus_on_visual_mark_pos(true)) {
             float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
             main_document_view->move_absolute(0, distance);
@@ -2301,8 +2308,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         validate_render();
     }
     else if (command->name == "move_visual_mark_up") {
-        float new_pos = get_ith_next_line_from_absolute_y(main_document_view->get_vertical_line_pos(), 0, true);
-        main_document_view->set_vertical_line_pos(new_pos);
+		float new_pos, new_begin_pos;
+        get_ith_next_line_from_absolute_y(main_document_view->get_vertical_line_end_pos(), 0, true, &new_begin_pos, &new_pos);
+        main_document_view->set_vertical_line_pos(new_pos, new_begin_pos);
         if (focus_on_visual_mark_pos(false)) {
             float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
             main_document_view->move_absolute(0, -distance);
@@ -2347,7 +2355,6 @@ void MainWidget::smart_jump_under_pos(int pos_x, int pos_y){
     fz_stext_page* stext_page = main_document_view->get_document()->get_stext_with_page_number(page);
     std::vector<fz_stext_char*> flat_chars;
     get_flat_chars_from_stext_page(stext_page, flat_chars);
-
 
     std::optional<std::pair<std::wstring, std::wstring>> generic_pair =\
             main_document_view->get_document()->get_generic_link_name_at_position(flat_chars, offset_x, offset_y);
@@ -2403,7 +2410,9 @@ void MainWidget::visual_mark_under_pos(int pos_x, int pos_y){
         opengl_widget->set_should_draw_vertical_line(true);
         fz_pixmap* pixmap = main_document_view->get_document()->get_small_pixmap(page);
         std::vector<unsigned int> hist = get_max_width_histogram_from_pixmap(pixmap);
-        std::vector<unsigned int> line_locations = get_line_ends_from_histogram(hist);
+        std::vector<unsigned int> line_locations;
+        std::vector<unsigned int> _;
+        get_line_begins_and_ends_from_histogram(hist, _, line_locations);
         int small_doc_x = static_cast<int>(doc_x * SMALL_PIXMAP_SCALE);
         int small_doc_y = static_cast<int>(doc_y * SMALL_PIXMAP_SCALE);
         int best_vertical_loc = find_best_vertical_line_location(pixmap, small_doc_x, small_doc_y);
@@ -2413,7 +2422,7 @@ void MainWidget::visual_mark_under_pos(int pos_x, int pos_y){
         main_document_view->document_to_window_pos_in_pixels(page, doc_x, best_vertical_loc_doc_pos, &window_x, &window_y);
         float abs_doc_x, abs_doc_y;
         main_document_view->window_to_absolute_document_pos(window_x, window_y, &abs_doc_x, &abs_doc_y);
-        main_document_view->set_vertical_line_pos(abs_doc_y);
+        main_document_view->set_vertical_line_pos(abs_doc_y, abs_doc_x);
         validate_render();
     }
 }
@@ -2544,6 +2553,31 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
         }
         opengl_widget->set_highlight_links(false, false);
     }
+    if (current_pending_command->name == "keyboard_select") {
+
+        QStringList parts = QString::fromStdWString(text).split(' ');
+
+        if (parts.size() == 2) {
+
+            fz_irect srect = get_tag_window_rect(parts.at(0).toStdString());
+            fz_irect erect = get_tag_window_rect(parts.at(1).toStdString());
+
+            handle_left_click(srect.x0+5, (srect.y0 + srect.y1) / 2, true);
+            handle_left_click(erect.x0-5 , (erect.y0 + erect.y1) / 2, false);
+            opengl_widget->set_should_highlight_words(false);
+		}
+	}
+    if (current_pending_command->name == "keyboard_smart_jump") {
+		fz_irect rect = get_tag_window_rect(utf8_encode(text));
+        smart_jump_under_pos((rect.x0 + rect.x1) / 2, (rect.y0 + rect.y1) / 2);
+		opengl_widget->set_should_highlight_words(false);
+	}
+
+    if (current_pending_command->name == "keyboard_overview") {
+		fz_irect rect = get_tag_window_rect(utf8_encode(text));
+        overview_under_pos((rect.x0 + rect.x1) / 2, (rect.y0 + rect.y1) / 2);
+		opengl_widget->set_should_highlight_words(false);
+	}
 
     if (current_pending_command->name == "goto_page_with_page_number") {
 
@@ -2671,7 +2705,15 @@ void MainWidget::set_current_widget(QWidget* new_widget) {
     }
 }
 
-float MainWidget::get_ith_next_line_from_absolute_y(float absolute_y, int i, bool cont) {
+float MainWidget::document_to_absolute_y(int page, float doc_x, float doc_y) {
+	int window_x, window_y;
+	main_document_view->document_to_window_pos_in_pixels(page, doc_x, doc_y, &window_x, &window_y);
+	float abs_doc_x, abs_doc_y;
+	main_document_view->window_to_absolute_document_pos(window_x, window_y, &abs_doc_x, &abs_doc_y);
+	return abs_doc_y;
+}
+
+void MainWidget::get_ith_next_line_from_absolute_y(float absolute_y, int i, bool cont, float* out_begin, float* out_end) {
     LOG("MainWidget::get_ith_next_line_from_absolute_y");
         float doc_x, doc_y;
         int page;
@@ -2679,38 +2721,49 @@ float MainWidget::get_ith_next_line_from_absolute_y(float absolute_y, int i, boo
 
         fz_pixmap* pixmap = main_document_view->get_document()->get_small_pixmap(page);
         std::vector<unsigned int> hist = get_max_width_histogram_from_pixmap(pixmap);
-        std::vector<unsigned int> line_locations = get_line_ends_from_histogram(hist);
+        std::vector<unsigned int> line_locations;
+        std::vector<unsigned int> line_locations_begins;
+        get_line_begins_and_ends_from_histogram(hist, line_locations_begins, line_locations);
         int small_doc_y = static_cast<int>(doc_y * SMALL_PIXMAP_SCALE);
 
         int index = find_nth_larger_element_in_sorted_list(line_locations, static_cast<unsigned int>(small_doc_y - 0.3f), i);
 
         if (index > -1) {
             int best_vertical_loc = line_locations[index];
+            int best_vertical_loc_begin = line_locations_begins[index];
+
             float best_vertical_loc_doc_pos = best_vertical_loc / SMALL_PIXMAP_SCALE;
-            int window_x, window_y;
-            main_document_view->document_to_window_pos_in_pixels(page, doc_x, best_vertical_loc_doc_pos, &window_x, &window_y);
-            float abs_doc_x, abs_doc_y;
-            main_document_view->window_to_absolute_document_pos(window_x, window_y, &abs_doc_x, &abs_doc_y);
-            return abs_doc_y;
+            float best_vertical_loc_begin_doc_pos = best_vertical_loc_begin / SMALL_PIXMAP_SCALE;
+
+            float abs_doc_y = document_to_absolute_y(page, doc_x, best_vertical_loc_doc_pos);
+            float abs_doc_begin_y = document_to_absolute_y(page, doc_x, best_vertical_loc_begin_doc_pos);
+            *out_begin = abs_doc_begin_y;
+            *out_end = abs_doc_y;
         }
         else {
-            if (!cont) return absolute_y;
+            if (!cont) {
+                *out_begin = absolute_y;
+                *out_end = absolute_y;
+                return;
+            }
 
             int next_page;
             if (i > 0) {
                 //next_page = main_document_view->get_current_page_number() + 1;
                 next_page = main_document_view->get_document()->get_offset_page_number(absolute_y) + 1;
                 if (next_page < main_document_view->get_document()->num_pages()) {
-                    return get_ith_next_line_from_absolute_y(main_document_view->get_document()->get_accum_page_height(next_page) + 0.5, 1, false);
+                    return get_ith_next_line_from_absolute_y(main_document_view->get_document()->get_accum_page_height(next_page) + 0.5, 1, false, out_begin, out_end);
                 }
             }
             else {
                 next_page = main_document_view->get_document()->get_offset_page_number(absolute_y);
                 if (next_page > 0) {
-                    return get_ith_next_line_from_absolute_y(main_document_view->get_document()->get_accum_page_height(next_page) - 0.5f, -1, false);
+                    return get_ith_next_line_from_absolute_y(main_document_view->get_document()->get_accum_page_height(next_page) - 0.5f, -1, false, out_begin, out_end);
                 }
             }
-            return absolute_y;
+			*out_begin = absolute_y;
+			*out_end = absolute_y;
+			return;
         }
 
 }
@@ -2718,7 +2771,7 @@ bool MainWidget::focus_on_visual_mark_pos(bool moving_down) {
     LOG("MainWidget::focus_on_visual_mark_pos");
     float window_x, window_y;
     float thresh = 1 - VISUAL_MARK_NEXT_PAGE_THRESHOLD;
-    main_document_view->absolute_to_window_pos(0, main_document_view->get_vertical_line_pos(), &window_x, &window_y);
+    main_document_view->absolute_to_window_pos(0, main_document_view->get_vertical_line_end_pos(), &window_x, &window_y);
     //if ((window_y < -thresh) || (window_y > thresh)) {
     if ((moving_down && (window_y < -thresh)) || ((!moving_down) && (window_y > thresh))) {
         main_document_view->goto_vertical_line_pos();
@@ -2997,3 +3050,57 @@ void MainWidget::dropEvent(QDropEvent* event)
     }
 }
 #endif
+
+void MainWidget::highlight_words() {
+
+    int page = main_document_view->get_current_page_number();
+    fz_stext_page* stext_page = main_document_view->get_document()->get_stext_with_page_number(page);
+    std::vector<fz_stext_char*> flat_chars;
+    std::vector<fz_rect> word_rects;
+    std::vector<std::pair<fz_rect, int>> word_rects_with_page;
+
+    get_flat_chars_from_stext_page(stext_page, flat_chars);
+    get_flat_words_from_flat_chars(flat_chars, word_rects);
+    for (auto rect : word_rects) {
+        word_rects_with_page.push_back(std::make_pair(rect, page));
+    }
+    opengl_widget->set_highlight_words(word_rects_with_page);
+    opengl_widget->set_should_highlight_words(true);
+
+}
+
+std::vector<fz_rect> MainWidget::get_flat_words() {
+    int page = main_document_view->get_current_page_number();
+    return main_document_view->get_document()->get_page_flat_words(page);
+}
+
+fz_irect MainWidget::get_tag_window_rect(std::string tag) {
+
+    int page = main_document_view->get_current_page_number();
+    fz_rect rect = get_tag_rect(tag);
+
+    fz_irect window_rect;
+
+	main_document_view->document_to_window_pos_in_pixels(
+		page,
+		rect.x0,
+		rect.y0,
+		&window_rect.x0,
+		&window_rect.y0);
+
+	main_document_view->document_to_window_pos_in_pixels(
+		page,
+		rect.x1,
+		rect.y1,
+		&window_rect.x1,
+		&window_rect.y1);
+
+    return window_rect;
+}
+
+fz_rect MainWidget::get_tag_rect(std::string tag) {
+	std::vector<fz_rect> word_rects = get_flat_words();
+	int index = get_index_from_tag(tag);
+    return word_rects[index];
+
+}
