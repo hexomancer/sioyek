@@ -1,5 +1,6 @@
 TEMPLATE = app
 TARGET = sioyek
+VERSION = 1.2.0
 INCLUDEPATH += ./pdf_viewer\
               mupdf/include \
               zlib
@@ -37,7 +38,8 @@ HEADERS += pdf_viewer/book.h \
            pdf_viewer/utf8/unchecked.h \
            pdf_viewer/synctex/synctex_parser.h \
            pdf_viewer/synctex/synctex_parser_utils.h \
-           pdf_viewer/RunGuard.h
+           pdf_viewer/RunGuard.h \
+           pdf_viewer/OpenWithApplication.h
 
 SOURCES += pdf_viewer/book.cpp \
            pdf_viewer/config.cpp \
@@ -55,8 +57,9 @@ SOURCES += pdf_viewer/book.cpp \
            pdf_viewer/path.cpp \
            pdf_viewer/utils.cpp \
            pdf_viewer/synctex/synctex_parser.c \
-           pdf_viewer/synctex/synctex_parser_utils.c\
-           pdf_viewer/RunGuard.cpp
+           pdf_viewer/synctex/synctex_parser_utils.c \
+           pdf_viewer/RunGuard.cpp \
+           pdf_viewer/OpenWithApplication.cpp
 
 
 win32{
@@ -92,5 +95,6 @@ mac {
     CONFIG+=sdk_no_version_check
     QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.15
     ICON = pdf_viewer\icon2.ico
+    QMAKE_INFO_PLIST = resources/Info.plist
 }
 

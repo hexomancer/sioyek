@@ -74,6 +74,7 @@
 #include "path.h"
 #include "RunGuard.h"
 #include "checksum.h"
+#include "OpenWithApplication.h"
 
 #define FTS_FUZZY_MATCH_IMPLEMENTATION
 #include "fts_fuzzy_match.h"
@@ -87,7 +88,7 @@ std::string LOG_FILE_NAME = "sioyek_log.txt";
 std::ofstream LOG_FILE;
 int FONT_SIZE = -1;
 int STATUS_BAR_FONT_SIZE = -1;
-std::string APPLICATION_VERSION = "1.1.0";
+std::string APPLICATION_VERSION = "1.2.0";
 float BACKGROUND_COLOR[3] = { 1.0f, 1.0f, 1.0f };
 float DARK_MODE_BACKGROUND_COLOR[3] = { 0.0f, 0.0f, 0.0f };
 float CUSTOM_BACKGROUND_COLOR[3] = { 1.0f, 1.0f, 1.0f };
@@ -365,7 +366,7 @@ int main(int argc, char* args[]) {
 	QSurfaceFormat::setDefaultFormat(format);
 
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);
-	QApplication app(argc, args);
+	OpenWithApplication app(argc, args);
 
     QCommandLineParser* parser = get_command_line_parser();
     parser->process(app.arguments());
@@ -487,6 +488,11 @@ int main(int argc, char* args[]) {
 	main_widget.show();
 
 	main_widget.handle_args(app.arguments());
+
+	// load input file from `QFileOpenEvent` for macOS drag and drop & "open with"
+	QObject::connect(&app, &OpenWithApplication::file_ready, [&main_widget](const QString& file_name) {
+		main_widget.handle_args(QStringList() << QCoreApplication::applicationFilePath() << file_name);
+	});
 
     // live reload the config files
 	QObject::connect(&pref_file_watcher, &QFileSystemWatcher::fileChanged, [&]() {
