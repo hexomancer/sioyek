@@ -101,6 +101,9 @@ public:
 	void goto_right();
 	void goto_right_smart();
 
+	float get_max_valid_x();
+	float get_min_valid_x();
+
 	float set_zoom_level(float zl);
 	float zoom_in();
 	float zoom_out();
@@ -136,4 +139,5 @@ public:
 	void goto_vertical_line_pos();
 	int get_page_offset();
 	void set_page_offset(int new_offset);
+	void rotate();
 };

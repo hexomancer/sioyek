@@ -2,6 +2,7 @@
 
 extern float MOVE_SCREEN_PERCENTAGE;
 extern float FIT_TO_PAGE_WIDTH_RATIO;
+extern float RULER_PADDING;
 
 DocumentView::DocumentView( fz_context* mupdf_context,
 	DatabaseManager* db_manager,
@@ -97,9 +98,13 @@ void DocumentView::set_offsets(float new_offset_x, float new_offset_y) {
 
 	float max_y_offset = current_document->get_accum_page_height(num_pages-1) + current_document->get_page_height(num_pages-1);
 	float min_y_offset = 0;
+	float min_x_offset = get_min_valid_x();
+	float max_x_offset = get_max_valid_x();
 
 	if (new_offset_y > max_y_offset) new_offset_y = max_y_offset;
 	if (new_offset_y < min_y_offset) new_offset_y = min_y_offset;
+	if (new_offset_x > max_x_offset) new_offset_x = max_x_offset;
+	if (new_offset_x < min_x_offset) new_offset_x = min_x_offset;
 
 	offset_x = new_offset_x;
 	offset_y = new_offset_y;
@@ -510,6 +515,7 @@ void DocumentView::move_absolute(float dx, float dy) {
 	LOG("DocumentView::move_absolute");
 	set_offsets(offset_x + dx, offset_y + dy);
 }
+
 void DocumentView::move(float dx, float dy) {
 	LOG("DocumentView::move");
 	int abs_dx = (dx / zoom_level);
@@ -898,6 +904,8 @@ void DocumentView::get_vertical_line_window_y(float* begin_y, float* end_y) {
 
 	float absol_begin_y, absol_end_y;
 	get_vertical_line_pos(&absol_begin_y, &absol_end_y);
+	absol_begin_y -= RULER_PADDING;
+	absol_end_y += RULER_PADDING;
 
 	float window_begin_x, window_begin_y;
 	float window_end_x, window_end_y;
@@ -937,4 +945,20 @@ int DocumentView::get_page_offset() {
 void DocumentView::set_page_offset(int new_offset) {
 	LOG("DocumentView::set_page_offset");
 	current_document->set_page_offset(new_offset);
+}
+
+float DocumentView::get_max_valid_x() {
+	return current_document->get_page_width(get_current_page_number()) / 2;
+}
+
+float DocumentView::get_min_valid_x() {
+	return -current_document->get_page_width(get_current_page_number()) / 2;
+}
+
+void DocumentView::rotate() {
+	int current_page = get_current_page_number();
+
+	current_document->rotate();
+	float new_offset = current_document->get_accum_page_height(current_page) + current_document->get_page_height(current_page) / 2;
+	set_offset_y(new_offset);
 }
