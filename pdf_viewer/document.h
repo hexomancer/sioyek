@@ -110,6 +110,10 @@ public:
 	std::wstring get_path();
 	std::string get_checksum();
 	int find_closest_bookmark_index(float to_offset_y);
+
+	int find_closest_sorted_bookmark_index(const std::vector<BookMark>& sorted_bookmarks, float to_offset_y) const;
+	int find_closest_sorted_highlight_index(const std::vector<Highlight>& sorted_highlights, float to_offset_y) const;
+
 	std::optional<Link> find_closest_link(float to_offset_y, int* index = nullptr);
 	bool update_link(Link new_link);
 	void delete_closest_bookmark(float to_y_offset);
@@ -117,7 +121,12 @@ public:
 	const std::vector<BookMark>& get_bookmarks() const;
 	std::vector<BookMark> get_sorted_bookmarks() const;
 	const std::vector<Highlight>& get_highlights() const;
-	const std::vector<Highlight> get_highlights_sorted() const;
+	const std::vector<Highlight> get_highlights_of_type(char type) const;
+	const std::vector<Highlight> get_highlights_sorted(char type=0) const;
+
+	std::optional<Highlight> get_next_highlight(float abs_y, char type=0, int offset=0) const;
+	std::optional<Highlight> get_prev_highlight(float abs_y, char type=0, int offset=0) const;
+
 	fz_link* get_page_links(int page_number);
 	void add_mark(char symbol, float y_offset);
 	bool remove_mark(char symbol);
