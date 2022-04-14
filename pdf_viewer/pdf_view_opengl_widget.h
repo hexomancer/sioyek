@@ -53,6 +53,7 @@ struct OpenGLSharedResources {
 	GLuint vertical_line_program;
 	GLuint vertical_line_dark_program;
 	GLuint separator_program;
+	GLuint stencil_program;
 
 	GLint dark_mode_contrast_uniform_location;
 	GLint highlight_color_uniform_location;
@@ -123,6 +124,7 @@ private:
 
 	int rotation_index = 0;
 	bool is_dragging = false;
+	bool fastread_mode = false;
 
 	int last_mouse_down_window_x = 0;
 	int last_mouse_down_window_y = 0;
@@ -154,6 +156,14 @@ protected:
 	void render_highlight_document(GLuint program, int page, fz_rect doc_rect);
 	void paintGL() override;
 	void render(QPainter* painter);
+
+	void enable_stencil();
+	void write_to_stencil();
+	void draw_stencil_rects(int page, const std::vector<fz_rect>& rects);
+	void use_stencil_to_write();
+	void disable_stencil();
+
+	void render_transparent_background();
 
 public:
 
@@ -226,5 +236,7 @@ public:
 	void rotate_counterclockwise();
 
 	bool is_rotated();
+	void toggle_fastread_mode();
+
 
 };

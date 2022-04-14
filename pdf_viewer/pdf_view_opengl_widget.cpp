@@ -197,6 +197,7 @@ void PdfViewOpenGLWidget::initializeGL() {
 		shared_gl_objects.vertical_line_dark_program = LoadShaders(shader_path.slash(L"simple.vertex"),  shader_path .slash(L"vertical_bar_dark.fragment"));
 		shared_gl_objects.custom_color_program = LoadShaders(shader_path.slash(L"simple.vertex"),  shader_path.slash(L"custom_colors.fragment"));
 		shared_gl_objects.separator_program = LoadShaders(shader_path.slash(L"simple.vertex"),  shader_path.slash(L"separator.fragment"));
+		shared_gl_objects.stencil_program = LoadShaders(shader_path.slash(L"stencil.vertex"),  shader_path.slash(L"stencil.fragment"));
 
 		shared_gl_objects.dark_mode_contrast_uniform_location = glGetUniformLocation(shared_gl_objects.rendered_dark_program, "contrast");
 
@@ -635,9 +636,11 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 	glDisable(GL_BLEND);
 	glBindVertexArray(vertex_array_object);
 
+
 	if (!valid_document()) {
+
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 		if (is_helper) {
 			//painter->endNativePainting();
@@ -658,7 +661,7 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 	else {
 		glClearColor(BACKGROUND_COLOR[0], BACKGROUND_COLOR[1], BACKGROUND_COLOR[2], 1.0f);
 	}
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 
 	std::vector<std::pair<int, fz_link*>> all_visible_links;
@@ -678,11 +681,26 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 					config_manager->get_config<float>(L"link_highlight_color"));
 				fz_link* links = document_view->get_document()->get_page_links(page);
 				while (links != nullptr) {
-					render_highlight_document(shared_gl_objects.highlight_program, page, links->rect);
+					//render_highlight_document(shared_gl_objects.highlight_program, page, links->rect);
 					all_visible_links.push_back(std::make_pair(page, links));
 					links = links->next;
 				}
 			}
+		}
+	}
+
+	if (fastread_mode) {
+
+		auto rects = document_view->get_document()->get_highlighted_character_masks(document_view->get_current_page_number());
+
+		if (rects.size() > 0) {
+			enable_stencil();
+			write_to_stencil();
+			draw_stencil_rects(document_view->get_current_page_number(), rects);
+			use_stencil_to_write();
+			render_transparent_background();
+			disable_stencil();
+
 		}
 	}
 
@@ -778,6 +796,7 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 	if (overview_page) {
 		render_overview(overview_page.value());
 	}
+
 
 	painter->endNativePainting();
 
@@ -1298,4 +1317,102 @@ void PdfViewOpenGLWidget::rotate_counterclockwise() {
 
 bool PdfViewOpenGLWidget::is_rotated() {
 	return rotation_index != 0;
+}
+
+void PdfViewOpenGLWidget::enable_stencil() {
+	glEnable(GL_STENCIL_TEST);
+	glStencilMask(0xFF);
+}
+
+void PdfViewOpenGLWidget::write_to_stencil() {
+	glStencilFunc(GL_NEVER, 1, 0xFF);
+	glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
+}
+
+void PdfViewOpenGLWidget::use_stencil_to_write() {
+	//glStencilFunc(GL_EQUAL, 1, 0xFF);
+	glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+}
+
+void PdfViewOpenGLWidget::disable_stencil() {
+	glDisable(GL_STENCIL_TEST);
+}
+
+void PdfViewOpenGLWidget::render_transparent_background() {
+
+	float bar_data[] = {
+		-1, -1,
+		1, -1,
+		-1, 1,
+		1, 1
+	};
+
+	glDisable(GL_CULL_FACE);
+	glUseProgram(shared_gl_objects.vertical_line_program);
+
+	float background_color[4] = { 1.0f, 1.0f, 1.0f, 0.5f };
+
+	if (this->color_mode == ColorPalette::Normal) {
+	}
+	else if (this->color_mode == ColorPalette::Dark) {
+		background_color[0] = background_color[1] = background_color[2] = 0;
+	}
+	else {
+		background_color[0] = CUSTOM_BACKGROUND_COLOR[0];
+		background_color[1] = CUSTOM_BACKGROUND_COLOR[1];
+		background_color[2] = CUSTOM_BACKGROUND_COLOR[2];
+	}
+
+	glUniform4fv(shared_gl_objects.line_color_uniform_location,
+		1,
+		background_color);
+
+	float time = -QDateTime::currentDateTime().msecsTo(creation_time);
+	glUniform1f(shared_gl_objects.line_time_uniform_location, time);
+
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glBindBuffer(GL_ARRAY_BUFFER, shared_gl_objects.vertex_buffer_object);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(bar_data), bar_data, GL_DYNAMIC_DRAW);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+	glDisable(GL_BLEND);
+}
+
+void PdfViewOpenGLWidget::draw_stencil_rects(int page, const std::vector<fz_rect>& rects) {
+
+	std::vector<float> window_rects;
+	for (auto rect : rects) {
+		fz_rect window_rect = document_view->document_to_window_rect(page, rect);
+		float triangle1[6] = {
+			window_rect.x0, window_rect.y0,
+			window_rect.x0, window_rect.y1,
+			window_rect.x1, window_rect.y0
+		};
+		float triangle2[6] = {
+			window_rect.x1, window_rect.y0,
+			window_rect.x0, window_rect.y1,
+			window_rect.x1, window_rect.y1
+		};
+		for (int i = 0; i < 6; i++) window_rects.push_back(triangle1[i]);
+		for (int i = 0; i < 6; i++) window_rects.push_back(triangle2[i]);
+	}
+
+	glUseProgram(shared_gl_objects.stencil_program);
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, shared_gl_objects.vertex_buffer_object);
+	glBufferData(GL_ARRAY_BUFFER, window_rects.size() * sizeof(float), window_rects.data(), GL_DYNAMIC_DRAW);
+	glDrawArrays(GL_TRIANGLES, 0, rects.size() * 6);
+	glDisableVertexAttribArray(0);
+
+}
+
+void PdfViewOpenGLWidget::toggle_fastread_mode() {
+	fastread_mode = !fastread_mode;
 }

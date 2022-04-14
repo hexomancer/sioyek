@@ -7,6 +7,7 @@
 #include <map>
 #include <regex>
 #include <qcryptographichash.h>
+#include <qjsondocument.h>
 
 #include <mupdf/pdf.h>
 
@@ -14,6 +15,11 @@
 
 extern float SMALL_PIXMAP_SCALE;
 extern float HIGHLIGHT_COLORS[26 * 3];
+extern std::wstring TEXT_HIGHLIGHT_URL;
+extern bool TEXT_SUMMARY_HIGHLIGHT_SHOULD_REFINE;
+extern bool TEXT_SUMMARY_HIGHLIGHT_SHOULD_FILL;
+extern int TEXT_SUMMARY_CONTEXT_SIZE;
+extern bool USE_HEURISTIC_IF_TEXT_SUMMARY_NOT_AVAILABLE;
 //extern bool AUTO_EMBED_ANNOTATIONS;
 
 int Document::get_mark_index(char symbol) {
@@ -333,6 +339,17 @@ Document::Document(fz_context* context, std::wstring file_name, DatabaseManager*
 	db_manager(db),
 	checksummer(checksummer){
 	last_update_time = QDateTime::currentDateTime();
+
+	network_access_manager = new QNetworkAccessManager;
+
+    QObject::connect(network_access_manager, &QNetworkAccessManager::finished, [&](QNetworkReply *reply) {
+		QJsonDocument responsedoc = QJsonDocument::fromJson(reply->readAll());
+		std::string page_string = responsedoc.object().value("page").toString().toStdString();
+		int page = atoi(page_string.c_str());
+		std::string highlights = responsedoc.object().value("text").toString().toStdString();
+		cached_fastread_highlights[page] = highlights;
+        reply->deleteLater();
+        });
 }
 
 void Document::count_chapter_pages(std::vector<int> &page_counts) {
@@ -593,9 +610,10 @@ Document::~Document() {
 			std::cerr << "Error: could not drop documnet" << std::endl;
 		}
 	}
+	delete network_access_manager;
 	//this->figure_indexing_thread.join();
 }
-void Document::reload() {
+void Document::reload(std::string password) {
 	LOG("Document::reload");
 	fz_drop_document(context, doc);
 	cached_num_pages = {};
@@ -620,15 +638,22 @@ void Document::reload() {
 
 	doc = nullptr;
 
-	open(invalid_flag_pointer);
+	open(invalid_flag_pointer, false, password);
 }
 
-bool Document::open(bool* invalid_flag, bool force_load_dimensions) {
+bool Document::open(bool* invalid_flag, bool force_load_dimensions, std::string password) {
 	LOG("Document::open");
 	last_update_time = QDateTime::currentDateTime();
 	if (doc == nullptr) {
 		fz_try(context) {
 			doc = fz_open_document(context, utf8_encode(file_name).c_str());
+			document_needs_password = fz_needs_password(context, doc);
+			if (password.size() > 0) {
+				int auth_res = fz_authenticate_password(context, doc, password.c_str());
+				if (auth_res > 0) {
+					password_was_correct = true;
+				}
+			}
 			//fz_layout_document(context, doc, 600, 800, 9);
 		}
 		fz_catch(context) {
@@ -862,6 +887,9 @@ fz_stext_page* Document::get_stext_with_page_number(fz_context* ctx, int page_nu
 	fz_stext_page* stext_page = nullptr;
 
 	fz_try(ctx) {
+		//if (needs_authentication()) {
+		//	fz_authenticate_password(context, doc, correct_password.c_str());
+		//}
 		stext_page = fz_new_stext_page_from_page_number(ctx, doc, page_number, nullptr);
 	}
 	fz_catch(ctx) {
@@ -1029,6 +1057,10 @@ void Document::index_figures(bool* invalid_flag) {
 		fz_try(context_) {
 
 			fz_document* doc_ = fz_open_document(context_, utf8_encode(file_name).c_str());
+
+			if (document_needs_password) {
+				fz_authenticate_password(context_, doc_, correct_password.c_str());
+			}
 
 			bool focus_next = false;
 			for (int i = 0; i < n; i++) {
@@ -1522,7 +1554,6 @@ void Document::get_text_selection(fz_context* ctx, fz_point selection_begin,
 			}
 		}
 	}
-
 }
 
 void Document::embed_annotations(std::wstring new_file_path) {
@@ -1776,4 +1807,130 @@ std::optional<Highlight> Document::get_prev_highlight(float abs_y, char type, in
 	}
 
 	return {};
+}
+
+bool Document::needs_password() {
+	return document_needs_password;
+}
+
+
+bool Document::apply_password(const char* password) {
+
+	if (context && doc) {
+		reload(password);
+		if (password_was_correct) {
+			correct_password = password;
+		}
+		return password_was_correct;
+	}
+	return false;
+}
+
+bool Document::needs_authentication() {
+	if (needs_password()) {
+		return !password_was_correct;
+	}
+	else {
+		return false;
+	}
+}
+
+std::vector<fz_rect> Document::get_highlighted_character_masks(int page) {
+
+	fz_stext_page* stext_page = get_stext_with_page_number(page);
+	std::vector<fz_stext_char*> flat_chars;
+	get_flat_chars_from_stext_page(stext_page, flat_chars);
+	std::vector<fz_rect> res;
+
+	auto fastread_highlights_ = get_page_fastread_highlights(page);
+	if (fastread_highlights_) {
+		auto fastread_highlights = fastread_highlights_.value();
+
+		if (fastread_highlights.size() != flat_chars.size()) {
+			std::wcout << L"invalid highlight received\n";
+			return res;
+		}
+
+		std::vector<fz_rect> highlighted_characters;
+		for (int i = 0; i < flat_chars.size(); i++) {
+			if (fastread_highlights[i] == '0') {
+				if (highlighted_characters.size() > 0) {
+					auto word_rects = create_word_rects_multiline(highlighted_characters);
+					for (auto rect : word_rects) {
+						res.push_back(rect);
+					}
+					highlighted_characters.clear();
+				}
+			}
+			else {
+				highlighted_characters.push_back(fz_rect_from_quad(flat_chars[i]->quad));
+			}
+		}
+		return res;
+	}
+	else {
+		if (!USE_HEURISTIC_IF_TEXT_SUMMARY_NOT_AVAILABLE) return res;
+
+		std::vector<std::wstring> words;
+		std::vector<std::vector<fz_rect>> word_rects;
+		get_word_rect_list_from_flat_chars(flat_chars, words, word_rects);
+
+
+		for (int i = 0; i < words.size(); i++) {
+
+			std::vector<fz_rect> highlighted_characters;
+
+			int num_highlighted = static_cast<int>(std::ceil(words[i].size() * 0.3f));
+			for (int j = 0; j < num_highlighted; j++) {
+				highlighted_characters.push_back(word_rects[i][j]);
+			}
+
+			res.push_back(create_word_rect(highlighted_characters));
+		}
+		return res;
+	}
+
+}
+
+std::optional<std::string> Document::get_page_fastread_highlights(int page) {
+	if (cached_fastread_highlights.find(page) != cached_fastread_highlights.end()) {
+		return cached_fastread_highlights[page];
+	}
+	else {
+		cached_fastread_highlights[page] = {};
+		std::vector<fz_stext_char*> chars;
+		auto stext_page = get_stext_with_page_number(page);
+		std::wstring page_text;
+		get_flat_chars_from_stext_page(stext_page, chars);
+		for (auto chr : chars) {
+			page_text.push_back(chr->c);
+		}
+
+		const QUrl url = QString::fromStdWString(TEXT_HIGHLIGHT_URL);
+		QNetworkRequest request(url);
+        request.setHeader(QNetworkRequest::ContentTypeHeader,
+            "application/x-www-form-urlencoded");
+        QUrlQuery postData;
+        postData.addQueryItem("text", QString::fromStdWString(page_text));
+        postData.addQueryItem("page", QString::number(page));
+
+		if (TEXT_SUMMARY_HIGHLIGHT_SHOULD_REFINE) {
+			postData.addQueryItem("refine", QString::number(1));
+		}
+		else {
+			postData.addQueryItem("refine", QString::number(0));
+		}
+		
+		if (TEXT_SUMMARY_HIGHLIGHT_SHOULD_FILL) {
+			postData.addQueryItem("fill", QString::number(1));
+		}
+		else {
+			postData.addQueryItem("fill", QString::number(0));
+		}
+		postData.addQueryItem("context_size", QString::number(TEXT_SUMMARY_CONTEXT_SIZE));
+
+
+        network_access_manager->post(request, postData.toString(QUrl::FullyEncoded).toUtf8());
+		return {};
+	}
 }
