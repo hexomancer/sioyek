@@ -69,7 +69,6 @@ GLfloat rotation_uvs[4][8] = {
 OpenGLSharedResources PdfViewOpenGLWidget::shared_gl_objects;
 
 GLuint PdfViewOpenGLWidget::LoadShaders(Path vertex_file_path, Path fragment_file_path) {
-	LOG("PdfViewOpenGLWidget::LoadShaders");
 
 	//const wchar_t* vertex_file_path = vertex_file_path_.c_str();
 	//const wchar_t* fragment_file_path = fragment_file_path_.c_str();
@@ -89,7 +88,6 @@ GLuint PdfViewOpenGLWidget::LoadShaders(Path vertex_file_path, Path fragment_fil
 		VertexShaderStream.close();
 	}
 	else {
-		printf("Impossible to open %s. Are you in the right directory ? Don't forget to read the FAQ !\n", vertex_file_path.get_path_utf8().c_str());
 		return 0;
 	}
 
@@ -105,7 +103,6 @@ GLuint PdfViewOpenGLWidget::LoadShaders(Path vertex_file_path, Path fragment_fil
 		FragmentShaderStream.close();
 	}
 	else {
-		printf("Impossible to open %s. Are you in the right directory ? Don't forget to read the FAQ !\n", fragment_file_path.get_path_utf8().c_str());
 		return 0;
 	}
 
@@ -113,7 +110,6 @@ GLuint PdfViewOpenGLWidget::LoadShaders(Path vertex_file_path, Path fragment_fil
 	int InfoLogLength;
 
 	// Compile Vertex Shader
-	printf("Compiling shader : %s\n", vertex_file_path.get_path_utf8().c_str());
 	vertex_shader_code_utf8 = utf8_encode(VertexShaderCode);
 	char const* VertexSourcePointer = vertex_shader_code_utf8.c_str();
 	glShaderSource(VertexShaderID, 1, &VertexSourcePointer, NULL);
@@ -129,7 +125,6 @@ GLuint PdfViewOpenGLWidget::LoadShaders(Path vertex_file_path, Path fragment_fil
 	}
 
 	// Compile Fragment Shader
-	printf("Compiling shader : %s\n", fragment_file_path.get_path_utf8().c_str());
 	fragment_shader_code_utf8 = utf8_encode(FragmentShaderCode);
 	char const* FragmentSourcePointer = fragment_shader_code_utf8.c_str();
 	glShaderSource(FragmentShaderID, 1, &FragmentSourcePointer, NULL);
@@ -145,7 +140,6 @@ GLuint PdfViewOpenGLWidget::LoadShaders(Path vertex_file_path, Path fragment_fil
 	}
 
 	// Link the program
-	printf("Linking program\n");
 	GLuint ProgramID = glCreateProgram();
 	glAttachShader(ProgramID, VertexShaderID);
 	glAttachShader(ProgramID, FragmentShaderID);
@@ -170,7 +164,6 @@ GLuint PdfViewOpenGLWidget::LoadShaders(Path vertex_file_path, Path fragment_fil
 }
 
 void PdfViewOpenGLWidget::initializeGL() {
-	LOG("PdfViewOpenGLWidget::initializeGL");
 	is_opengl_initialized = true;
 
 	initializeOpenGLFunctions();
@@ -234,7 +227,6 @@ void PdfViewOpenGLWidget::initializeGL() {
 }
 
 void PdfViewOpenGLWidget::resizeGL(int w, int h) {
-	LOG("PdfViewOpenGLWidget::resizeGL");
 	glViewport(0, 0, w, h);
 
 	if (document_view) {
@@ -243,7 +235,6 @@ void PdfViewOpenGLWidget::resizeGL(int w, int h) {
 }
 
 void PdfViewOpenGLWidget::render_line_window(GLuint program, float gl_vertical_pos, float gl_vertical_begin_pos) {
-	LOG("PdfViewOpenGLWidget::render_line_window");
 
 
 	float bar_height = 4.0f;
@@ -296,7 +287,6 @@ void PdfViewOpenGLWidget::render_line_window(GLuint program, float gl_vertical_p
 
 }
 void PdfViewOpenGLWidget::render_highlight_window(GLuint program, fz_rect window_rect, bool draw_border) {
-	LOG("PdfViewOpenGLWidget::render_highlight_window");
 
 	if (is_rotated()) {
 		return;
@@ -336,19 +326,16 @@ void PdfViewOpenGLWidget::render_highlight_window(GLuint program, fz_rect window
 }
 
 void PdfViewOpenGLWidget::render_highlight_absolute(GLuint program, fz_rect absolute_document_rect, bool draw_border) {
-	LOG("PdfViewOpenGLWidget::render_highlight_absolute");
 	fz_rect window_rect = document_view->absolute_to_window_rect(absolute_document_rect);
 	render_highlight_window(program, window_rect, draw_border);
 }
 
 void PdfViewOpenGLWidget::render_highlight_document(GLuint program, int page, fz_rect doc_rect) {
-	LOG("PdfViewOpenGLWidget::render_highlight_document");
 	fz_rect window_rect = document_view->document_to_window_rect(page, doc_rect);
 	render_highlight_window(program, window_rect);
 }
 
 void PdfViewOpenGLWidget::paintGL() {
-	LOG("PdfViewOpenGLWidget::paintGL");
 
 	QPainter painter(this);
 	QTextOption option;
@@ -377,7 +364,6 @@ PdfViewOpenGLWidget::PdfViewOpenGLWidget(DocumentView* document_view, PdfRendere
 }
 
 void PdfViewOpenGLWidget::cancel_search() {
-	LOG("PdfViewOpenGLWidget::cancel_search");
 	search_results.clear();
 	current_search_result_index =-1;
 	is_searching = false;
@@ -385,7 +371,6 @@ void PdfViewOpenGLWidget::cancel_search() {
 }
 
 void PdfViewOpenGLWidget::handle_escape() {
-	LOG("PdfViewOpenGLWidget::handle_escape");
 	cancel_search();
 	synctex_highlights.clear();
 	should_highlight_links = false;
@@ -394,18 +379,15 @@ void PdfViewOpenGLWidget::handle_escape() {
 }
 
 void PdfViewOpenGLWidget::toggle_highlight_links() {
-	LOG("PdfViewOpenGLWidget::toggle_highlight_links");
 	this->should_highlight_links = !this->should_highlight_links;
 }
 
 void PdfViewOpenGLWidget::set_highlight_links(bool should_highlight, bool should_show_numbers) {
-	LOG("PdfViewOpenGLWidget::set_highlight_links");
 	this->should_highlight_links = should_highlight;
 	this->should_show_numbers = should_show_numbers;
 }
 
 int PdfViewOpenGLWidget::get_num_search_results() {
-	LOG("PdfViewOpenGLWidget::get_num_search_results");
 	search_results_mutex.lock();
 	int num = search_results.size();
 	search_results_mutex.unlock();
@@ -413,12 +395,10 @@ int PdfViewOpenGLWidget::get_num_search_results() {
 }
 
 int PdfViewOpenGLWidget::get_current_search_result_index() {
-	LOG("PdfViewOpenGLWidget::get_current_search_result_index");
 	return current_search_result_index;
 }
 
 bool PdfViewOpenGLWidget::valid_document() {
-	LOG("PdfViewOpenGLWidget::valid_document");
 	if (document_view) {
 		if (document_view->get_document()) {
 			return true;
@@ -428,7 +408,6 @@ bool PdfViewOpenGLWidget::valid_document() {
 }
 
 void PdfViewOpenGLWidget::goto_search_result(int offset) {
-	LOG("PdfViewOpenGLWidget::goto_search_result");
 	if (!valid_document()) return;
 
 	search_results_mutex.lock();
@@ -450,7 +429,6 @@ void PdfViewOpenGLWidget::goto_search_result(int offset) {
 
 
 void PdfViewOpenGLWidget::render_overview(OverviewState overview) {
-	LOG("PdfViewOpenGLWidget::render_overview");
 
 	if (!valid_document()) return;
 
@@ -559,7 +537,6 @@ void PdfViewOpenGLWidget::render_overview(OverviewState overview) {
 	glBufferData(GL_ARRAY_BUFFER, sizeof(g_quad_uvs), g_quad_uvs, GL_DYNAMIC_DRAW);
 }
 void PdfViewOpenGLWidget::render_page(int page_number) {
-	LOG("PdfViewOpenGLWidget::render_page");
 
 	if (!valid_document()) return;
 
@@ -629,7 +606,6 @@ void PdfViewOpenGLWidget::render_page(int page_number) {
 }
 
 void PdfViewOpenGLWidget::render(QPainter* painter) {
-	LOG("PdfViewOpenGLWidget::render");
 
 	painter->beginNativePainting();
 	glDisable(GL_CULL_FACE);
@@ -855,7 +831,6 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 }
 
 bool PdfViewOpenGLWidget::get_is_searching(float* prog) {
-	LOG("PdfViewOpenGLWidget::get_is_searching");
 	if (is_search_cancelled) {
 		return false;
 	}
@@ -870,7 +845,6 @@ bool PdfViewOpenGLWidget::get_is_searching(float* prog) {
 }
 
 void PdfViewOpenGLWidget::search_text(const std::wstring& text, std::optional<std::pair<int,int>> range) {
-	LOG("PdfViewOpenGLWidget::search_text");
 
 	if (!document_view) return;
 
@@ -898,7 +872,6 @@ void PdfViewOpenGLWidget::search_text(const std::wstring& text, std::optional<st
 }
 
 void PdfViewOpenGLWidget::set_dark_mode(bool mode) {
-	LOG("PdfViewOpenGLWidget::set_dark_mode");
 	if (mode == true) {
 		this->color_mode = ColorPalette::Dark;
 	}
@@ -908,17 +881,14 @@ void PdfViewOpenGLWidget::set_dark_mode(bool mode) {
 }
 
 void PdfViewOpenGLWidget::toggle_dark_mode() {
-	LOG("PdfViewOpenGLWidget::toggle_dark_mode");
 	set_dark_mode(!(this->color_mode == ColorPalette::Dark));
 }
 
 void PdfViewOpenGLWidget::set_synctex_highlights(std::vector<std::pair<int, fz_rect>> highlights) {
-	LOG("PdfViewOpenGLWidget::set_synctex_highlights");
 	synctex_highlights = std::move(highlights);
 }
 
 void PdfViewOpenGLWidget::on_document_view_reset() {
-	LOG("PdfViewOpenGLWidget::on_document_view_reset");
 	this->synctex_highlights.clear();
 }
 
@@ -939,17 +909,14 @@ PdfViewOpenGLWidget::~PdfViewOpenGLWidget() {
 //}
 
 void PdfViewOpenGLWidget::set_should_draw_vertical_line(bool val) {
-	LOG("PdfViewOpenGLWidget::set_should_draw_vertical_line");
 	should_draw_vertical_line = val;
 }
 
 bool PdfViewOpenGLWidget::get_should_draw_vertical_line() {
-	LOG("PdfViewOpenGLWidget::get_should_draw_vertical_line");
 	return should_draw_vertical_line;
 }
 
 void PdfViewOpenGLWidget::mouseMoveEvent(QMouseEvent* mouse_event) {
-	LOG("PdfViewOpenGLWidget::mouseMoveEvent");
 
 	if (is_helper && (document_view != nullptr)) {
 
@@ -968,7 +935,6 @@ void PdfViewOpenGLWidget::mouseMoveEvent(QMouseEvent* mouse_event) {
 }
 
 void PdfViewOpenGLWidget::mousePressEvent(QMouseEvent* mevent) {
-	LOG("PdfViewOpenGLWidget::mousePressEvent");
 	if (is_helper && (document_view != nullptr)) {
 		int window_x = mevent->pos().x();
 		int window_y = mevent->pos().y();
@@ -984,7 +950,6 @@ void PdfViewOpenGLWidget::mousePressEvent(QMouseEvent* mevent) {
 }
 
 void PdfViewOpenGLWidget::mouseReleaseEvent(QMouseEvent* mouse_event) {
-	LOG("PdfViewOpenGLWidget::mouseReleaseEvent");
 
 	if (is_helper && (document_view != nullptr)) {
 
@@ -1009,7 +974,6 @@ void PdfViewOpenGLWidget::mouseReleaseEvent(QMouseEvent* mouse_event) {
 }
 
 void PdfViewOpenGLWidget::wheelEvent(QWheelEvent* wevent) {
-	LOG("PdfViewOpenGLWidget::wheelEvent");
 	if (is_helper && (document_view != nullptr)) {
 
 		bool is_control_pressed = QApplication::queryKeyboardModifiers().testFlag(Qt::ControlModifier)
@@ -1049,21 +1013,17 @@ void PdfViewOpenGLWidget::wheelEvent(QWheelEvent* wevent) {
 }
 
 void PdfViewOpenGLWidget::register_on_link_edit_listener(std::function<void(const OpenedBookState&)> listener) {
-	LOG("PdfViewOpenGLWidget::register_on_link_edit_listener");
 	this->on_link_edit = listener;
 }
 void PdfViewOpenGLWidget::set_overview_page(std::optional<OverviewState> overview) {
-	LOG("PdfViewOpenGLWidget::set_overview_page");
 	this->overview_page = overview;
 }
 
 std::optional<OverviewState> PdfViewOpenGLWidget::get_overview_page() {
-	LOG("PdfViewOpenGLWidget::get_overview_page");
 	return overview_page;
 }
 
 void PdfViewOpenGLWidget::draw_empty_helper_message(QPainter* painter) {
-	LOG("PdfViewOpenGLWidget::draw_empty_helper_message");
 	// should be called with native painting disabled
 
 	QString message = "No portals yet";
@@ -1078,12 +1038,10 @@ void PdfViewOpenGLWidget::draw_empty_helper_message(QPainter* painter) {
 }
 
 void PdfViewOpenGLWidget::set_visible_page_number(std::optional<int> val) {
-	LOG("PdfViewOpenGLWidget::set_visible_page_number");
 	this->visible_page_number = val;
 }
 
 bool PdfViewOpenGLWidget::is_presentation_mode() {
-	LOG("PdfViewOpenGLWidget::is_presentation_mode");
 	if (visible_page_number) {
 		return true;
 	}
@@ -1091,7 +1049,6 @@ bool PdfViewOpenGLWidget::is_presentation_mode() {
 }
 
 fz_rect	PdfViewOpenGLWidget::get_overview_rect() {
-	LOG("PdfViewOpenGLWidget::get_overview_rect");
 	fz_rect res;
 	res.x0 = overview_offset_x - overview_half_width;
 	res.y0 = -overview_offset_y - overview_half_height;
@@ -1101,7 +1058,6 @@ fz_rect	PdfViewOpenGLWidget::get_overview_rect() {
 }
 
 std::vector<fz_rect> PdfViewOpenGLWidget::get_overview_border_rects() {
-	LOG("PdfViewOpenGLWidget::get_overview_border_rects");
 	std::vector<fz_rect> res;
 
 	fz_rect bottom_rect;
@@ -1137,10 +1093,9 @@ std::vector<fz_rect> PdfViewOpenGLWidget::get_overview_border_rects() {
 	return res;
 }
 
-bool PdfViewOpenGLWidget::is_window_point_in_overview(float window_x, float window_y) {
-	LOG("PdfViewOpenGLWidget::is_window_point_in_overview");
+bool PdfViewOpenGLWidget::is_window_point_in_overview(fvec2 window_point) {
 	if (get_overview_page()) {
-		fz_point point{ window_x, window_y };
+		fz_point point{ window_point.x(), window_point.y()};
 		fz_rect rect = get_overview_rect();
 		bool res = fz_is_point_inside_rect(point, rect);
 		return res;
@@ -1149,7 +1104,6 @@ bool PdfViewOpenGLWidget::is_window_point_in_overview(float window_x, float wind
 }
 
 bool PdfViewOpenGLWidget::is_window_point_in_overview_border(float window_x, float window_y, OverviewSide* which_border) {
-	LOG("PdfViewOpenGLWidget::is_window_point_in_overview_border");
 
 	if (!get_overview_page().has_value()) {
 		return false;
@@ -1167,18 +1121,19 @@ bool PdfViewOpenGLWidget::is_window_point_in_overview_border(float window_x, flo
 }
 
 void PdfViewOpenGLWidget::get_overview_offsets(float* offset_x, float* offset_y) {
-	LOG("PdfViewOpenGLWidget::get_overview_offsets");
 	*offset_x = overview_offset_x;
 	*offset_y = overview_offset_y;
 }
 void PdfViewOpenGLWidget::set_overview_offsets(float offset_x, float offset_y) {
-	LOG("PdfViewOpenGLWidget::set_overview_offsets");
 	overview_offset_x = offset_x;
 	overview_offset_y = offset_y;
 }
 
+void PdfViewOpenGLWidget::set_overview_offsets(fvec2 offsets) {
+	set_overview_offsets(offsets.x(), offsets.y());
+}
+
 float PdfViewOpenGLWidget::get_overview_side_pos(int index) {
-	LOG("PdfViewOpenGLWidget::get_overview_side_pos");
 	if (index == OverviewSide::bottom) {
 		return overview_offset_y - overview_half_height;
 	}
@@ -1193,31 +1148,30 @@ float PdfViewOpenGLWidget::get_overview_side_pos(int index) {
 	}
 }
 
-void PdfViewOpenGLWidget::set_overview_side_pos(int index, fz_rect original_rect, float diff_x, float diff_y) {
-	LOG("PdfViewOpenGLWidget::set_overview_side_pos");
+void PdfViewOpenGLWidget::set_overview_side_pos(int index, fz_rect original_rect, fvec2 diff) {
 
 	fz_rect new_rect = original_rect;
 
 	if (index == OverviewSide::bottom) {
-		float new_bottom_pos = original_rect.y0 + diff_y;
+		float new_bottom_pos = original_rect.y0 + diff.y();
 		if (new_bottom_pos < original_rect.y1) {
 			new_rect.y0 = new_bottom_pos;
 		}
 	}
 	if (index == OverviewSide::top) {
-		float new_top_pos = original_rect.y1 + diff_y;
+		float new_top_pos = original_rect.y1 + diff.y();
 		if (new_top_pos > original_rect.y0) {
 			new_rect.y1 = new_top_pos;
 		}
 	}
 	if (index == OverviewSide::left) {
-		float new_left_pos = original_rect.x0 + diff_x;
+		float new_left_pos = original_rect.x0 + diff.x();
 		if (new_left_pos < original_rect.x1) {
 			new_rect.x0 = new_left_pos;
 		}
 	}
 	if (index == OverviewSide::right) {
-		float new_right_pos = original_rect.x1 + diff_x;
+		float new_right_pos = original_rect.x1 + diff.x();
 		if (new_right_pos > original_rect.x0) {
 			new_rect.x1 = new_right_pos;
 		}
@@ -1227,7 +1181,6 @@ void PdfViewOpenGLWidget::set_overview_side_pos(int index, fz_rect original_rect
 }
 
 void PdfViewOpenGLWidget::set_overview_rect(fz_rect rect) {
-	LOG("PdfViewOpenGLWidget::set_overview_rect");
 	float halfwidth = (rect.x1 - rect.x0) / 2;
 	float halfheight = (rect.y1 - rect.y0) / 2;
 	float offset_x = rect.x0 + halfwidth;
@@ -1240,7 +1193,6 @@ void PdfViewOpenGLWidget::set_overview_rect(fz_rect rect) {
 }
 
 void PdfViewOpenGLWidget::set_custom_color_mode(bool mode) {
-	LOG("PdfViewOpenGLWidget::set_custom_color_mode");
 	if (mode) {
 		this->color_mode = ColorPalette::Custom;
 	}
@@ -1250,12 +1202,10 @@ void PdfViewOpenGLWidget::set_custom_color_mode(bool mode) {
 }
 
 void PdfViewOpenGLWidget::toggle_custom_color_mode() {
-	LOG("PdfViewOpenGLWidget::toggle_custom_color_mode");
 	set_custom_color_mode(!(this->color_mode == ColorPalette::Custom));
 }
 
 void PdfViewOpenGLWidget::bind_program() {
-	LOG("PdfViewOpenGLWidget::bind_program");
 	if (color_mode == ColorPalette::Dark) {
 		glUseProgram(shared_gl_objects.rendered_dark_program);
 		glUniform1f(shared_gl_objects.dark_mode_contrast_uniform_location, DARK_MODE_CONTRAST);
@@ -1272,11 +1222,11 @@ void PdfViewOpenGLWidget::bind_program() {
 	}
 }
 
-void PdfViewOpenGLWidget::window_pos_to_overview_pos(float window_x_normal, float window_y_normal, float* doc_offset_x, float* doc_offset_y, int* doc_page) {
+DocumentPos PdfViewOpenGLWidget::window_pos_to_overview_pos(NormalizedWindowPos window_pos) {
 	float window_width = static_cast<float>(size().width());
 	float window_height = static_cast<float>(size().height());
-	int window_x = static_cast<int>((1.0f + window_x_normal) / 2 * window_width);
-	int window_y = static_cast<int>((1.0f + window_y_normal) / 2 * window_height);
+	int window_x = static_cast<int>((1.0f + window_pos.x) / 2 * window_width);
+	int window_y = static_cast<int>((1.0f + window_pos.y) / 2 * window_height);
 	float overview_width = document_view->get_view_width() * overview_half_width;
 	float page_width = document_view->get_document()->get_page_width(get_overview_page().value().page);
 	float zoom_level = overview_width / page_width;
@@ -1287,9 +1237,10 @@ void PdfViewOpenGLWidget::window_pos_to_overview_pos(float window_x_normal, floa
 	int relative_window_x = static_cast<int>(static_cast<float>(window_x - overview_left) / zoom_level);
 	int relative_window_y = static_cast<int>(static_cast<float>(window_y - overview_mid) / zoom_level);
 
-	*doc_offset_x = relative_window_x;
-	*doc_offset_y = overview_page.value().offset_y + relative_window_y;
-	*doc_page = get_overview_page().value().page;
+	float doc_offset_x = relative_window_x;
+	float doc_offset_y = overview_page.value().offset_y + relative_window_y;
+	int doc_page = get_overview_page().value().page;
+	return {doc_page, doc_offset_x, doc_offset_y};
 }
 
 void PdfViewOpenGLWidget::toggle_highlight_words() {

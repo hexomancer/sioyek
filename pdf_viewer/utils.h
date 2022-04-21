@@ -11,21 +11,29 @@
 #include <qcommandlineparser.h>
 
 #include <qstandarditemmodel.h>
+#include <qpoint.h>
 
 #include <mupdf/fitz.h>
 
 #include "book.h"
 #include "utf8.h"
+#include "coordinates.h"
 
 #define LL_ITER(name, start) for(auto name=start;(name);name=name->next)
+
+struct ParsedUri {
+	int page;
+	float x;
+	float y;
+};
 
 std::wstring to_lower(const std::wstring& inp);
 bool is_separator(fz_stext_char* last_char, fz_stext_char* current_char);
 void get_flat_toc(const std::vector<TocNode*>& roots, std::vector<std::wstring>& output, std::vector<int>& pages);
 int mod(int a, int b);
 bool range_intersects(float range1_start, float range1_end, float range2_start, float range2_end);
-void parse_uri(std::string uri, int* page, float* offset_x, float* offset_y);
-char get_symbol(int scancode, bool is_shift_pressed);
+ParsedUri parse_uri(std::string uri);
+char get_symbol(int key, bool is_shift_pressed, const std::vector<char>&special_symbols);
 
 template<typename T>
 int argminf(const std::vector<T> &collection, std::function<float(T)> f) {
@@ -95,6 +103,7 @@ void split_path(std::wstring path, std::vector<std::wstring>& res);
 //std::wstring canonicalize_path(const std::wstring& path);
 std::wstring add_redundant_dot_to_path(const std::wstring& path);
 float manhattan_distance(float x1, float y1, float x2, float y2);
+float manhattan_distance(fvec2 v1, fvec2 v2);
 QWidget* get_top_level_widget(QWidget* widget);
 std::wstring strip_string(std::wstring& input_string);
 //void index_generic(const std::vector<fz_stext_char*>& flat_chars, int page_number, std::vector<IndexedData>& indices);
@@ -123,22 +132,6 @@ int find_nth_larger_element_in_sorted_list(std::vector<T> sorted_list, T value, 
 	}
 
 }
-class Logger {
-private:
-	std::string name;
-public:
-	Logger(std::string name);
-	~Logger();
-};
-#define LOG_ENABLED
-
-//#define LOG_ENABLED
-
-#ifdef LOG_ENABLED
-#define LOG(name) Logger _ = Logger(name);
-#else
-#define LOG(name)
-#endif
 
 QString get_color_qml_string(float r, float g, float b);
 void copy_file(std::wstring src_path, std::wstring dst_path);
@@ -156,3 +149,7 @@ std::wstring truncate_string(const std::wstring& inp, int size);
 std::wstring get_page_formatted_string(int page);
 fz_rect create_word_rect(const std::vector<fz_rect>& chars);
 std::vector<fz_rect> create_word_rects_multiline(const std::vector<fz_rect>& chars);
+void get_flat_chars_from_block(fz_stext_block* block, std::vector<fz_stext_char*>& flat_chars);
+void get_text_from_flat_chars(const std::vector<fz_stext_char*>& flat_chars, std::wstring& string_res, std::vector<int>& indices);
+bool is_string_titlish(const std::wstring& str);
+bool is_title_parent_of(const std::wstring& parent_title, const std::wstring& child_title, bool* are_same);

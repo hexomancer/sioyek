@@ -24,6 +24,7 @@
 #include "book.h"
 #include "checksum.h"
 
+
 class Document {
 
 private:
@@ -34,6 +35,7 @@ private:
 	std::vector<Link> links;
 	DatabaseManager* db_manager = nullptr;
 	std::vector<TocNode*> top_level_toc_nodes;
+	std::vector<TocNode*> created_top_level_toc_nodes;
 	std::vector<std::wstring> flat_toc_names;
 	std::vector<int> flat_toc_pages;
 	QNetworkAccessManager* network_access_manager = nullptr;
@@ -101,7 +103,7 @@ public:
 	void add_bookmark(const std::wstring& desc, float y_offset);
 	//void add_bookmark_annotation(const BookMark& bookmark);
 	//void delete_bookmark_annotation(const BookMark& bookmark);
-	void add_highlight(const std::wstring& desc, const std::vector<fz_rect>& highlight_rects, fz_point selection_begin, fz_point selection_end, char type);
+	void add_highlight(const std::wstring& desc, const std::vector<fz_rect>& highlight_rects, AbsoluteDocumentPos selection_begin, AbsoluteDocumentPos selection_end, char type);
 	//void add_highlight_annotation(const Highlight& highlight, const std::vector<fz_rect>& selected_rects);
 	void delete_highlight_with_index(int index);
 	void delete_highlight_with_offsets(float begin_x, float begin_y, float end_x, float end_y);
@@ -144,7 +146,7 @@ public:
 	bool has_toc();
 	const std::vector<std::wstring>& get_flat_toc_names();
 	const std::vector<int>& get_flat_toc_pages();
-	bool open(bool* invalid_flag, bool force_load_dimensions=false, std::string password="");
+	bool open(bool* invalid_flag, bool force_load_dimensions=false, std::string password="", bool temp=false);
 	void reload(std::string password="");
 	QDateTime get_last_edit_time();
 	unsigned int get_milies_since_last_document_update_time();
@@ -162,7 +164,7 @@ public:
 	void load_page_dimensions(bool force_load_now);
 	int num_pages();
 	fz_rect get_page_absolute_rect(int page);
-	void absolute_to_page_pos(float absolute_x, float absolute_y, float* doc_x, float* doc_y, int* doc_page);
+	DocumentPos absolute_to_page_pos(AbsoluteDocumentPos absolute_pos);
 	fz_rect absolute_to_page_rect(const fz_rect& absolute_rect, int* page);
 	QStandardItemModel* get_toc_model();
 	void page_pos_to_absolute_pos(int page, float page_x, float page_y, float* abs_x, float* abs_y);
@@ -188,13 +190,13 @@ public:
 	bool find_generic_location(const std::wstring& type, const std::wstring& name, int* page, float* y_offset);
 	bool can_use_highlights();
 
-	void get_text_selection(fz_point selection_begin,
-		fz_point selection_end,
+	void get_text_selection(AbsoluteDocumentPos selection_begin,
+		AbsoluteDocumentPos selection_end,
 		bool is_word_selection, // when in word select mode, we select entire words even if the range only partially includes the word
 		std::vector<fz_rect>& selected_characters,
 		std::wstring& selected_text);
-	void get_text_selection(fz_context* ctx, fz_point selection_begin,
-		fz_point selection_end,
+	void get_text_selection(fz_context* ctx, AbsoluteDocumentPos selection_begin,
+		AbsoluteDocumentPos selection_end,
 		bool is_word_selection,
 		std::vector<fz_rect>& selected_characters,
 		std::wstring& selected_text);
@@ -209,6 +211,18 @@ public:
 	bool apply_password(const char* password);
 	std::optional<std::string> get_page_fastread_highlights(int page);
 	std::vector<fz_rect> get_highlighted_character_masks(int page);
+	fz_rect get_page_rect_no_cache(int page);
+	std::optional<PdfLink> get_link_in_pos(int page, float x, float y);
+	std::optional<PdfLink> get_link_in_pos(const DocumentPos& pos);
+
+	//void create_table_of_contents(std::vector<TocNode*>& top_nodes);
+	int add_stext_page_to_created_toc(fz_stext_page* stext_page,
+		int page_number,
+		std::vector<TocNode*>& toc_node_stack,
+		std::vector<TocNode*>& top_level_node);
+
+	float document_to_absolute_y(int page, float doc_y);
+	void get_ith_next_line_from_absolute_y(float absolute_y, int i, bool cont, float* out_begin, float* out_end);
 
 	friend class DocumentManager;
 };
@@ -225,6 +239,7 @@ public:
 	DocumentManager(fz_context* mupdf_context, DatabaseManager* db_manager, CachedChecksummer* checksummer);
 
 	Document* get_document(const std::wstring& path);
+	void free_document(Document* document);
 	const std::unordered_map<std::wstring, Document*>& get_cached_documents();
 	void delete_global_mark(char symbol);
 };

@@ -26,6 +26,8 @@ HEADERS += pdf_viewer/book.h \
            pdf_viewer/pdf_renderer.h \
            pdf_viewer/pdf_view_opengl_widget.h \
            pdf_viewer/checksum.h \
+           pdf_viewer/new_file_checker.h \
+           pdf_viewer/coordinates.h \
            pdf_viewer/sqlite3.h \
            pdf_viewer/sqlite3ext.h \
            pdf_viewer/ui.h \
@@ -51,6 +53,8 @@ SOURCES += pdf_viewer/book.cpp \
            pdf_viewer/pdf_renderer.cpp \
            pdf_viewer/pdf_view_opengl_widget.cpp \
            pdf_viewer/checksum.cpp \
+           pdf_viewer/new_file_checker.cpp \
+           pdf_viewer/coordinates.cpp \
            pdf_viewer/sqlite3.c \
            pdf_viewer/ui.cpp \
            pdf_viewer/path.cpp \
@@ -100,7 +104,7 @@ mac {
     QMAKE_CXXFLAGS += -std=c++17
     LIBS += -ldl -Lmupdf/build/release -lmupdf -lmupdf-third -lmupdf-threads -lz
     CONFIG+=sdk_no_version_check
-    QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.15
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 11
     ICON = pdf_viewer\icon2.ico
     QMAKE_INFO_PLIST = resources/Info.plist
 }

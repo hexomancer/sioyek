@@ -29,6 +29,7 @@ extern std::ofstream LOG_FILE;
 #include <windows.h>
 #endif
 
+
 std::wstring to_lower(const std::wstring& inp) {
 	std::wstring res;
 	for (char c : inp) {
@@ -99,22 +100,24 @@ bool range_intersects(float range1_start, float range1_end, float range2_start, 
 	return true;
 }
 
-void parse_uri(std::string uri, int* page, float* offset_x, float* offset_y) {
+ParsedUri parse_uri(std::string uri) {
 	int comma_index = -1;
 
 	uri = uri.substr(1, uri.size() - 1);
 	comma_index = static_cast<int>(uri.find(","));
-	*page = atoi(uri.substr(0, comma_index ).c_str());
+	int page = atoi(uri.substr(0, comma_index ).c_str());
 
 	uri = uri.substr(comma_index+1, uri.size() - comma_index-1);
 	comma_index = static_cast<int>(uri.find(","));
-	*offset_x = atof(uri.substr(0, comma_index ).c_str());
+	float offset_x = atof(uri.substr(0, comma_index ).c_str());
 
 	uri = uri.substr(comma_index+1, uri.size() - comma_index-1);
-	*offset_y = atof(uri.c_str());
+	float offset_y = atof(uri.c_str());
+
+	return { page, offset_x, offset_y };
 }
 
-char get_symbol(int key, bool is_shift_pressed) {
+char get_symbol(int key, bool is_shift_pressed, const std::vector<char>& special_symbols) {
 
 	if (key >= 'A' && key <= 'Z') {
 		if (is_shift_pressed) {
@@ -126,6 +129,10 @@ char get_symbol(int key, bool is_shift_pressed) {
 	}
 
 	if (key >= '0' && key <= '9') {
+		return key;
+	}
+
+	if (std::find(special_symbols.begin(), special_symbols.end(), key) != special_symbols.end()) {
 		return key;
 	}
 
@@ -349,17 +356,21 @@ std::vector<fz_stext_char*> reorder_stext_line(fz_stext_line* line) {
 	return std::move(reordered_chars);
 }
 
+void get_flat_chars_from_block(fz_stext_block* block, std::vector<fz_stext_char*>& flat_chars) {
+	if (block->type == FZ_STEXT_BLOCK_TEXT) {
+		LL_ITER(line, block->u.t.first_line) {
+			std::vector<fz_stext_char*> reordered_chars = reorder_stext_line(line);
+			for (auto ch : reordered_chars) {
+				flat_chars.push_back(ch);
+			}
+		}
+	}
+}
+
 void get_flat_chars_from_stext_page(fz_stext_page* stext_page, std::vector<fz_stext_char*>& flat_chars) {
 
 	LL_ITER(block, stext_page->first_block) {
-		if (block->type == FZ_STEXT_BLOCK_TEXT) {
-			LL_ITER(line, block->u.t.first_line) {
-				std::vector<fz_stext_char*> reordered_chars = reorder_stext_line(line);
-				for (auto ch : reordered_chars) {
-					flat_chars.push_back(ch);
-				}
-			}
-		}
+		get_flat_chars_from_block(block, flat_chars);
 	}
 }
 
@@ -1504,6 +1515,10 @@ float manhattan_distance(float x1, float y1, float x2, float y2) {
 	return abs(x1 - x2) + abs(y1 - y2);
 }
 
+float manhattan_distance(fvec2 v1, fvec2 v2) {
+	return manhattan_distance(v1.x(), v1.y(), v2.x(), v2.y());
+}
+
 QWidget* get_top_level_widget(QWidget* widget) {
 	while (widget->parent() != nullptr) {
 		widget = widget->parentWidget();
@@ -1595,14 +1610,6 @@ void split_root_file(QString path, QString& out_root, QString& out_partial) {
 	}
 }
 
-Logger::Logger(std::string _name) {
-	name = _name;
-	std::wcout << L"entered " << utf8_decode(name) << "\n";
-}
-
-Logger::~Logger() {
-	 std::wcout << L"exited " << utf8_decode(name) << "\n";
-}
 
 QString get_color_hexadecimal(float color) {
 	QString hex_map[] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f" };
@@ -1668,3 +1675,40 @@ std::wstring get_page_formatted_string(int page) {
 	ss << L"[ " << page << L" ]";
 	return ss.str();
 }
+
+bool is_string_titlish(const std::wstring& str) {
+	if (str.size() <= 5 || str.size() >= 60) {
+		return false;
+	}
+	std::wregex regex(L"([0-9]+\\.)+([0-9]+)*");
+	std::wsmatch match;
+
+	std::regex_search(str, match, regex);
+	int pos = match.position();
+	int size = match.length();
+	return (size > 0) && (pos == 0);
+}
+
+bool is_title_parent_of(const std::wstring& parent_title, const std::wstring& child_title, bool* are_same) {
+	int count = std::min(parent_title.size(), child_title.size());
+
+	*are_same = false;
+
+	for (int i = 0; i < count; i++) {
+		if (parent_title.at(i) == ' ') {
+			if (child_title.at(i) == ' ') {
+				*are_same = true;
+				return false;
+			}
+			else {
+				return true;
+			}
+		}
+		if (child_title.at(i) != parent_title.at(i)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+

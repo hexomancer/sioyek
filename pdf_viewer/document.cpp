@@ -21,10 +21,11 @@ extern bool TEXT_SUMMARY_HIGHLIGHT_SHOULD_REFINE;
 extern bool TEXT_SUMMARY_HIGHLIGHT_SHOULD_FILL;
 extern int TEXT_SUMMARY_CONTEXT_SIZE;
 extern bool USE_HEURISTIC_IF_TEXT_SUMMARY_NOT_AVAILABLE;
-//extern bool AUTO_EMBED_ANNOTATIONS;
+extern bool ENABLE_EXPERIMENTAL_FEATURES;
+extern bool CREATE_TABLE_OF_CONTENTS_IF_NOT_EXISTS;
+extern int MAX_CREATED_TABLE_OF_CONTENTS_SIZE;
 
 int Document::get_mark_index(char symbol) {
-	LOG("Document::get_mark_index");
 	for (int i = 0; i < marks.size(); i++) {
 		if (marks[i].symbol == symbol) {
 			return i;
@@ -34,7 +35,6 @@ int Document::get_mark_index(char symbol) {
 }
 
 void Document::load_document_metadata_from_db() {
-	LOG("Document::load_document_metadata_from_db");
 	std::string checksum = get_checksum();
 	db_manager->insert_document_hash(get_path(), checksum);
 	marks.clear();
@@ -50,7 +50,6 @@ void Document::load_document_metadata_from_db() {
 
 
 void Document::add_bookmark(const std::wstring& desc, float y_offset) {
-	LOG("Document::add_bookmark");
 	BookMark bookmark{ y_offset, desc };
 	bookmarks.push_back(bookmark);
 	db_manager->insert_bookmark(get_checksum(), desc, y_offset);
@@ -60,7 +59,6 @@ void Document::add_bookmark(const std::wstring& desc, float y_offset) {
 }
 
 void Document::fill_highlight_rects(fz_context* ctx) {
-	LOG("Document::fill_highlight_rects");
 
 	for (int i = 0; i < highlights.size(); i++) {
 
@@ -79,11 +77,10 @@ void Document::fill_highlight_rects(fz_context* ctx) {
 
 void Document::add_highlight(const std::wstring& desc,
 	const std::vector<fz_rect>& highlight_rects,
-	fz_point selection_begin,
-	fz_point selection_end,
+	AbsoluteDocumentPos selection_begin,
+	AbsoluteDocumentPos selection_end,
 	char type)
 {
-	LOG("Document::add_highlight");
 	if (type > 'z' || type < 'a') {
 		type = 'a';
 	}
@@ -111,12 +108,10 @@ void Document::add_highlight(const std::wstring& desc,
 }
 
 bool Document::get_is_indexing() {
-	LOG("Document::get_is_indexing");
 	return is_indexing;
 }
 
 void Document::add_link(Link link, bool insert_into_database) {
-	LOG("Document::add_link");
 	links.push_back(link);
 	if (insert_into_database) {
 		db_manager->insert_link(
@@ -130,19 +125,16 @@ void Document::add_link(Link link, bool insert_into_database) {
 }
 
 std::wstring Document::get_path() {
-	LOG("Document::get_path");
 
 	return file_name;
 }
 
 std::string Document::get_checksum() {
-	LOG("Document::get_checksum");
 
 	return checksummer->get_checksum(get_path());
 }
 
 int Document::find_closest_bookmark_index(float to_offset_y) {
-	LOG("Document::find_closest_bookmark_index");
 
 	int min_index = argminf<BookMark>(bookmarks, [to_offset_y](BookMark bm) {
 		return abs(bm.y_offset - to_offset_y);
@@ -170,7 +162,6 @@ int Document::find_closest_sorted_highlight_index(const std::vector<Highlight>& 
 }
 
 void Document::delete_closest_bookmark(float to_y_offset) {
-	LOG("Document::delete_closest_bookmark");
 	int closest_index = find_closest_bookmark_index(to_y_offset);
 	if (closest_index > -1) {
 		BookMark deleted_bookmark = bookmarks[closest_index];
@@ -183,7 +174,6 @@ void Document::delete_closest_bookmark(float to_y_offset) {
 }
 
 void Document::delete_highlight_with_index(int index) {
-	LOG("Document::delete_highlight_with_index");
 	Highlight highlight_to_delete = highlights[index];
 
 	db_manager->delete_highlight(
@@ -199,7 +189,6 @@ void Document::delete_highlight_with_index(int index) {
 }
 
 void Document::delete_highlight_with_offsets(float begin_x, float begin_y, float end_x, float end_y) {
-	LOG("Document::delete_highlight_with_offsets");
 	int index_to_delete = -1;
 	for (int i = 0; i < highlights.size(); i++) {
 		if (
@@ -218,7 +207,6 @@ void Document::delete_highlight_with_offsets(float begin_x, float begin_y, float
 }
 
 std::optional<Link> Document::find_closest_link(float to_offset_y, int* index) {
-	LOG("Document::find_closest_link");
 	int min_index = argminf<Link>(links, [to_offset_y](Link l) {
 		return abs(l.src_offset_y - to_offset_y);
 		});
@@ -231,7 +219,6 @@ std::optional<Link> Document::find_closest_link(float to_offset_y, int* index) {
 }
 
 bool Document::update_link(Link new_link) {
-	LOG("Document::update_link");
 	for (auto& link : links) {
 		if (link.src_offset_y == new_link.src_offset_y) {
 			link.dst.book_state.offset_x = new_link.dst.book_state.offset_x;
@@ -244,7 +231,6 @@ bool Document::update_link(Link new_link) {
 }
 
 void Document::delete_closest_link(float to_offset_y) {
-	LOG("Document::delete_closest_link");
 	int closest_index = -1;
 	if (find_closest_link(to_offset_y, &closest_index)) {
 		db_manager->delete_link( get_checksum(), links[closest_index].src_offset_y);
@@ -253,19 +239,16 @@ void Document::delete_closest_link(float to_offset_y) {
 }
 
 const std::vector<BookMark>& Document::get_bookmarks() const {
-	LOG("std::vector<BookMark>& Document::get_bookmarks");
 	return bookmarks;
 }
 
 std::vector<BookMark> Document::get_sorted_bookmarks() const {
-	LOG("Document::get_sorted_bookmarks");
 	std::vector<BookMark> res = bookmarks;
 	std::sort(res.begin(), res.end(), [](const BookMark& lhs, const BookMark& rhs) {return lhs.y_offset < rhs.y_offset; });
 	return res;
 }
 
 const std::vector<Highlight>& Document::get_highlights() const {
-	LOG("std::vector<Highlight>& Document::get_highlights");
 	return highlights;
 }
 
@@ -281,7 +264,6 @@ const std::vector<Highlight> Document::get_highlights_of_type(char type) const {
 }
 
 const std::vector<Highlight> Document::get_highlights_sorted(char type) const {
-	LOG("std::vector<Highlight> Document::get_highlights_sorted");
 	std::vector<Highlight> res;
 
 	if (type == 0) {
@@ -300,7 +282,6 @@ const std::vector<Highlight> Document::get_highlights_sorted(char type) const {
 
 
 void Document::add_mark(char symbol, float y_offset) {
-	LOG("Document::add_mark");
 	int current_mark_index = get_mark_index(symbol);
 	if (current_mark_index == -1) {
 		marks.push_back({ y_offset, symbol });
@@ -313,7 +294,6 @@ void Document::add_mark(char symbol, float y_offset) {
 }
 
 bool Document::remove_mark(char symbol) {
-	LOG("Document::remove_mark");
 	for (int i = 0; i < marks.size(); i++) {
 		if (marks[i].symbol == symbol) {
 			marks.erase(marks.begin() + i);
@@ -324,7 +304,6 @@ bool Document::remove_mark(char symbol) {
 }
 
 bool Document::get_mark_location_if_exists(char symbol, float* y_offset) {
-	LOG("Document::get_mark_location_if_exists");
 	int mark_index = get_mark_index(symbol);
 	if (mark_index == -1) {
 		return false;
@@ -341,23 +320,24 @@ Document::Document(fz_context* context, std::wstring file_name, DatabaseManager*
 	checksummer(checksummer){
 	last_update_time = QDateTime::currentDateTime();
 
-	network_access_manager = new QNetworkAccessManager;
+	if (ENABLE_EXPERIMENTAL_FEATURES) {
+		network_access_manager = new QNetworkAccessManager;
 
-    QObject::connect(network_access_manager, &QNetworkAccessManager::finished, [&](QNetworkReply *reply) {
-		QJsonDocument responsedoc = QJsonDocument::fromJson(reply->readAll());
-		std::string page_string = responsedoc.object().value("page").toString().toStdString();
-		int page = atoi(page_string.c_str());
-		std::string highlights = responsedoc.object().value("text").toString().toStdString();
-		cached_fastread_highlights[page] = highlights;
-        reply->deleteLater();
-		if (invalid_flag_pointer != nullptr) {
-			*invalid_flag_pointer = true;
-		}
-        });
+		QObject::connect(network_access_manager, &QNetworkAccessManager::finished, [&](QNetworkReply* reply) {
+			QJsonDocument responsedoc = QJsonDocument::fromJson(reply->readAll());
+			std::string page_string = responsedoc.object().value("page").toString().toStdString();
+			int page = atoi(page_string.c_str());
+			std::string highlights = responsedoc.object().value("text").toString().toStdString();
+			cached_fastread_highlights[page] = highlights;
+			reply->deleteLater();
+			if (invalid_flag_pointer != nullptr) {
+				*invalid_flag_pointer = true;
+			}
+		});
+	}
 }
 
 void Document::count_chapter_pages(std::vector<int> &page_counts) {
-	LOG("Document::count_chapter_pages");
 	int num_chapters = fz_count_chapters(context, doc);
 
 	for (int i = 0; i < num_chapters; i++) {
@@ -368,7 +348,6 @@ void Document::count_chapter_pages(std::vector<int> &page_counts) {
 }
 
 void Document::count_chapter_pages_accum(std::vector<int> &accum_page_counts) {
-	LOG("Document::count_chapter_pages_accum");
 	std::vector<int> raw_page_count;
 	count_chapter_pages(raw_page_count);
 
@@ -382,27 +361,27 @@ void Document::count_chapter_pages_accum(std::vector<int> &accum_page_counts) {
 }
 
 const std::vector<TocNode*>& Document::get_toc() {
-	LOG("std::vector<TocNode*>& Document::get_toc");
-	return top_level_toc_nodes;
+	if (top_level_toc_nodes.size() > 0) {
+		return top_level_toc_nodes;
+	}
+	else {
+		return created_top_level_toc_nodes;
+	}
 }
 
 bool Document::has_toc() {
-	LOG("Document::has_toc");
-	return top_level_toc_nodes.size() > 0;
+	return top_level_toc_nodes.size() > 0 || created_top_level_toc_nodes.size() > 0;
 }
 
 const std::vector<std::wstring>& Document::get_flat_toc_names() {
-	LOG("std::vector<std::wstring>& Document::get_flat_toc_names");
 	return flat_toc_names;
 }
 
 const std::vector<int>& Document::get_flat_toc_pages() {
-	LOG("std::vector<int>& Document::get_flat_toc_pages");
 	return flat_toc_pages;
 }
 
 float Document::get_page_height(int page_index) {
-	LOG("Document::get_page_height");
 	std::lock_guard guard(page_dims_mutex);
 	if ((page_index >= 0) && (page_index < page_heights.size())) {
 		return page_heights[page_index];
@@ -413,7 +392,6 @@ float Document::get_page_height(int page_index) {
 }
 
 float Document::get_page_width(int page_index) {
-	LOG("Document::get_page_width");
 	if ((page_index >= 0) && (page_index < page_widths.size())) {
 		return page_widths[page_index];
 	}
@@ -423,7 +401,6 @@ float Document::get_page_width(int page_index) {
 }
 
 float Document::get_page_width_smart(int page_index, float* left_ratio, float* right_ratio, int* normal_page_width) {
-	LOG("Document::get_page_width_smart");
 	//fz_pixmap* rendered_pixmap = fz_new_pixmap_from_page_number(mupdf_context, doc, req.page, transform_matrix, fz_device_rgb(mupdf_context), 0);
 	//fz_matrix ctm = fz_scale(0.3, 0.3);
 	fz_matrix ctm = fz_identity;
@@ -492,7 +469,6 @@ float Document::get_page_width_smart(int page_index, float* left_ratio, float* r
 }
 
 float Document::get_accum_page_height(int page_index) {
-	LOG("Document::get_accum_page_height");
 	std::lock_guard guard(page_dims_mutex);
 	if (page_index < 0 || (page_index >= accum_page_heights.size())) {
 		return 0.0f;
@@ -502,31 +478,33 @@ float Document::get_accum_page_height(int page_index) {
 
 
 fz_outline* Document::get_toc_outline() {
-	LOG("Document::get_toc_outline");
 	fz_outline* res = nullptr;
 	fz_try(context) {
 		res = fz_load_outline(context, doc);
 	}
 	fz_catch(context) {
-		std::cerr << "Error: Could not load outline ... " << std::endl;
+		//std::cerr << "Error: Could not load outline ... " << std::endl;
 	}
 	return res;
 }
 
 void Document::create_toc_tree(std::vector<TocNode*>& toc) {
-	LOG("Document::create_toc_tree");
 	fz_try(context) {
 		fz_outline* outline = get_toc_outline();
-		convert_toc_tree(outline, toc);
-		fz_drop_outline(context, outline);
+		if (outline) {
+			convert_toc_tree(outline, toc);
+			fz_drop_outline(context, outline);
+		}
+		else {
+			//create_table_of_contents(toc);
+		}
 	}
 	fz_catch(context) {
-		std::cerr << "Error: Could not load outline ... " << std::endl;
+		//std::cerr << "Error: Could not load outline ... " << std::endl;
 	}
 }
 
 void Document::convert_toc_tree(fz_outline* root, std::vector<TocNode*>& output) {
-	LOG("Document::convert_toc_tree");
 	// convert an fz_outline structure to a tree of TocNodes
 
 	std::vector<int> accum_chapter_pages;
@@ -558,11 +536,10 @@ void Document::convert_toc_tree(fz_outline* root, std::vector<TocNode*>& output)
 }
 
 fz_link* Document::get_page_links(int page_number) {
-	LOG("Document::get_page_links");
 	if (cached_page_links.find(page_number) != cached_page_links.end()) {
 		return cached_page_links.at(page_number);
 	}
-	std::cerr << "getting links .... for " << page_number << std::endl;
+	//std::cerr << "getting links .... for " << page_number << std::endl;
 
 	fz_link* res = nullptr;
 	fz_try(context) {
@@ -580,20 +557,17 @@ fz_link* Document::get_page_links(int page_number) {
 }
 
 QDateTime Document::get_last_edit_time() {
-	LOG("Document::get_last_edit_time");
 	QFileInfo info(QString::fromStdWString(get_path()));
 	return info.lastModified();
 }
 
 unsigned int Document::get_milies_since_last_document_update_time() {
-	LOG("int Document::get_milies_since_last_document_update_time");
 	QDateTime now = QDateTime::currentDateTime();
 	return last_update_time.msecsTo(now);
 
 }
 
 unsigned int Document::get_milies_since_last_edit_time() {
-	LOG("int Document::get_milies_since_last_edit_time");
 	QDateTime last_modified_time = get_last_edit_time();
 	QDateTime now = QDateTime::currentDateTime();
 	return last_modified_time.msecsTo(now);
@@ -614,11 +588,12 @@ Document::~Document() {
 			std::cerr << "Error: could not drop documnet" << std::endl;
 		}
 	}
-	delete network_access_manager;
+	if (network_access_manager != nullptr) {
+		delete network_access_manager;
+	}
 	//this->figure_indexing_thread.join();
 }
 void Document::reload(std::string password) {
-	LOG("Document::reload");
 	fz_drop_document(context, doc);
 	cached_num_pages = {};
 
@@ -645,8 +620,7 @@ void Document::reload(std::string password) {
 	open(invalid_flag_pointer, false, password);
 }
 
-bool Document::open(bool* invalid_flag, bool force_load_dimensions, std::string password) {
-	LOG("Document::open");
+bool Document::open(bool* invalid_flag, bool force_load_dimensions, std::string password, bool temp) {
 	last_update_time = QDateTime::currentDateTime();
 	if (doc == nullptr) {
 		fz_try(context) {
@@ -663,7 +637,7 @@ bool Document::open(bool* invalid_flag, bool force_load_dimensions, std::string 
 		fz_catch(context) {
 			std::wcerr << "could not open " << file_name << std::endl;
 		}
-		if (doc != nullptr) {
+		if ((doc != nullptr) && (!temp)) {
 			//load_document_metadata_from_db();
 			load_page_dimensions(force_load_dimensions);
 			create_toc_tree(top_level_toc_nodes);
@@ -679,7 +653,7 @@ bool Document::open(bool* invalid_flag, bool force_load_dimensions, std::string 
 		return false;
 	}
 	else {
-		std::cerr << "warning! calling open() on an open document" << std::endl;
+		//std::cerr << "warning! calling open() on an open document" << std::endl;
 		return true;
 	}
 }
@@ -690,7 +664,6 @@ bool Document::open(bool* invalid_flag, bool force_load_dimensions, std::string 
 //const vector<float>& get_accum_page_heights();
 
 void Document::get_visible_pages(float doc_y_range_begin, float doc_y_range_end, std::vector<int>& visible_pages) {
-	LOG("Document::get_visible_pages");
 
 	std::lock_guard guard(page_dims_mutex);
 
@@ -711,7 +684,6 @@ void Document::get_visible_pages(float doc_y_range_begin, float doc_y_range_end,
 }
 
 void Document::load_page_dimensions(bool force_load_now) {
-	LOG("Document::load_page_dimensions");
 	page_heights.clear();
 	accum_page_heights.clear();
 	page_widths.clear();
@@ -736,7 +708,7 @@ void Document::load_page_dimensions(bool force_load_now) {
 			}
 		}
 		fz_catch(context) {
-			std::wcout << L"could not load sample page dimensions\n";
+			std::wcout << L"Error: could not load sample page dimensions\n";
 		}
 	}
 
@@ -803,7 +775,6 @@ void Document::load_page_dimensions(bool force_load_now) {
 
 
 fz_rect Document::get_page_absolute_rect(int page) {
-	LOG("Document::get_page_absolute_rect");
 	std::lock_guard guard(page_dims_mutex);
 
 	fz_rect res;
@@ -825,7 +796,6 @@ fz_rect Document::get_page_absolute_rect(int page) {
 }
 
 int Document::num_pages() {
-	LOG("Document::num_pages");
 	if (cached_num_pages.has_value()) {
 		return cached_num_pages.value();
 	}
@@ -851,7 +821,6 @@ DocumentManager::DocumentManager(fz_context* mupdf_context, DatabaseManager* db,
 
 
 Document* DocumentManager::get_document(const std::wstring& path) {
-	LOG("DocumentManager::get_document");
 	if (cached_documents.find(path) != cached_documents.end()) {
 		return cached_documents.at(path);
 	}
@@ -861,12 +830,10 @@ Document* DocumentManager::get_document(const std::wstring& path) {
 }
 
 const std::unordered_map<std::wstring, Document*>& DocumentManager::get_cached_documents() {
-	LOG("std::unordered_map<std::wstring, Document*>& DocumentManager::get_cached_documents");
 	return cached_documents;
 }
 
 void DocumentManager::delete_global_mark(char symbol) {
-	LOG("DocumentManager::delete_global_mark");
 	for (auto [path, doc] : cached_documents) {
 		doc->remove_mark(symbol);
 	}
@@ -874,12 +841,10 @@ void DocumentManager::delete_global_mark(char symbol) {
 
 
 fz_stext_page* Document::get_stext_with_page_number(int page_number) {
-	LOG("Document::get_stext_with_page_number");
 	return get_stext_with_page_number(context, page_number);
 }
 
 fz_stext_page* Document::get_stext_with_page_number(fz_context* ctx, int page_number) {
-	LOG("Document::get_stext_with_page_number");
 	const int MAX_CACHED_STEXT_PAGES = 10;
 
 	for (auto [page, cached_stext_page] : cached_stext_pages) {
@@ -914,45 +879,39 @@ fz_stext_page* Document::get_stext_with_page_number(fz_context* ctx, int page_nu
 }
 
 int Document::get_page_offset() {
-	LOG("Document::get_page_offset");
 	return page_offset;
 }
 
 void Document::set_page_offset(int new_offset) {
-	LOG("Document::set_page_offset");
 	page_offset = new_offset;
 }
 
 fz_rect Document::absolute_to_page_rect(const fz_rect& absolute_rect, int* page) {
 	float page_x0, page_x1, page_y0, page_y1;
 	int page_number = -1;
-	absolute_to_page_pos(absolute_rect.x0, absolute_rect.y0, &page_x0, &page_y0, &page_number);
-	absolute_to_page_pos(absolute_rect.x1, absolute_rect.y1, &page_x1, &page_y1, &page_number);
+	DocumentPos bottom_left = absolute_to_page_pos({ absolute_rect.x0, absolute_rect.y0 });
+	DocumentPos top_right = absolute_to_page_pos({ absolute_rect.x1, absolute_rect.y1 });
 	if (page != nullptr) {
 		*page = page_number;
 	}
 	fz_rect res;
-	res.x0 = page_x0;
-	res.x1 = page_x1;
-	res.y0 = page_y0;
-	res.y1 = page_y1;
+	res.x0 = bottom_left.x;
+	res.x1 = top_right.x;
+	res.y0 = bottom_left.y;
+	res.y1 = top_right.y;
 	return res;
 }
 
-void Document::absolute_to_page_pos(float absolute_x, float absolute_y, float* doc_x, float* doc_y, int* doc_page) {
-	LOG("Document::absolute_to_page_pos");
+DocumentPos Document::absolute_to_page_pos(AbsoluteDocumentPos absp){
 
 	std::lock_guard guard(page_dims_mutex);
 	if (accum_page_heights.size() == 0) {
-		*doc_x = 0;
-		*doc_y = 0;
-		*doc_page = 0;
-		return;
+		return {0, 0.0f, 0.0f};
 	}
 
 	int i = (std::lower_bound(
 		accum_page_heights.begin(),
-		accum_page_heights.end(), absolute_y) -  accum_page_heights.begin()) - 1;
+		accum_page_heights.end(), absp.y) -  accum_page_heights.begin()) - 1;
 	i = std::max(0, i);
 
 	float acc_page_heights_i = 0.0f;
@@ -960,20 +919,17 @@ void Document::absolute_to_page_pos(float absolute_x, float absolute_y, float* d
 	if (i < accum_page_heights.size()) {
 		acc_page_heights_i = accum_page_heights[i];
 		page_width_i = page_widths[i];
-		float remaining_y = absolute_y - acc_page_heights_i;
+		float remaining_y = absp.y - acc_page_heights_i;
 		float page_width = page_width_i;
 
-		*doc_x = page_width / 2 + absolute_x;
-		*doc_y = remaining_y;
-		*doc_page = i;
+		return {i, page_width / 2 + absp.x, remaining_y};
 	}
 	else {
-		*doc_page = -1;
+		return {-1, 0.0f, 0.0f};
 	}
 }
 
 QStandardItemModel* Document::get_toc_model() {
-	LOG("Document::get_toc_model");
 	if (!cached_toc_model) {
 		cached_toc_model = get_model_from_toc(get_toc());
 	}
@@ -999,7 +955,6 @@ QStandardItemModel* Document::get_toc_model() {
 //}
 
 void Document::page_pos_to_absolute_pos(int page, float page_x, float page_y, float* abs_x, float* abs_y) {
-	LOG("Document::page_pos_to_absolute_pos");
 	std::lock_guard guard(page_dims_mutex);
 	if ((page_widths.size() == 0) || (page >= page_widths.size())) {
 		*abs_x = 0;
@@ -1012,7 +967,6 @@ void Document::page_pos_to_absolute_pos(int page, float page_x, float page_y, fl
 }
 
 fz_rect Document::page_rect_to_absolute_rect(int page, fz_rect page_rect) {
-	LOG("Document::page_rect_to_absolute_rect");
 	fz_rect res;
 	page_pos_to_absolute_pos(page, page_rect.x0, page_rect.y0, &res.x0, &res.y0);
 	page_pos_to_absolute_pos(page, page_rect.x1, page_rect.y1, &res.x1, &res.y1);
@@ -1021,7 +975,6 @@ fz_rect Document::page_rect_to_absolute_rect(int page, fz_rect page_rect) {
 }
 
 int Document::get_offset_page_number(float y_offset) {
-	LOG("Document::get_offset_page_number");
 	std::lock_guard guard(page_dims_mutex);
 
 	if (accum_page_heights.size() == 0) {
@@ -1040,7 +993,6 @@ int Document::get_offset_page_number(float y_offset) {
 }
 
 void Document::index_figures(bool* invalid_flag) {
-	LOG("Document::index_figures");
 	int n = num_pages();
 
 	if (this->figure_indexing_thread.has_value()) {
@@ -1052,10 +1004,13 @@ void Document::index_figures(bool* invalid_flag) {
 	is_indexing = true;
 
 	this->figure_indexing_thread = std::thread([this, n, invalid_flag]() {
-		std::wcout << "starting index thread ..." << std::endl;
 		std::vector<IndexedData> local_generic_data;
 		std::map<std::wstring, IndexedData> local_reference_data;
 		std::map<std::wstring, std::vector<IndexedData>> local_equation_data;
+
+		std::vector<TocNode*> toc_stack;
+		std::vector<TocNode*> top_level_nodes;
+		int num_added_toc_entries = 0;
 
 		fz_context* context_ = fz_clone_context(context);
 		fz_try(context_) {
@@ -1085,6 +1040,13 @@ void Document::index_figures(bool* invalid_flag) {
 				index_equations(flat_chars, i, local_equation_data);
 				index_generic(flat_chars, i, local_generic_data);
 
+				// if the document doesn't have table of contents, try to create one
+				if (CREATE_TABLE_OF_CONTENTS_IF_NOT_EXISTS && (top_level_toc_nodes.size() == 0)) {
+					if (num_added_toc_entries < MAX_CREATED_TABLE_OF_CONTENTS_SIZE) {
+						num_added_toc_entries += add_stext_page_to_created_toc(stext_page, i, toc_stack, top_level_nodes);
+					}
+				}
+
 				fz_drop_stext_page(context_, stext_page);
 			}
 
@@ -1103,8 +1065,9 @@ void Document::index_figures(bool* invalid_flag) {
 		equation_indices = std::move(local_equation_data);
 		generic_indices = std::move(local_generic_data);
 
+		created_top_level_toc_nodes = std::move(top_level_nodes);
+
 		figure_indices_mutex.unlock();
-		std::wcout << "figure indexing finished ... " << std::endl;
 		is_indexing = false;
 		if (invalid_flag) {
 			*invalid_flag = true;
@@ -1114,14 +1077,12 @@ void Document::index_figures(bool* invalid_flag) {
 }
 
 void Document::stop_indexing() {
-	LOG("Document::stop_indexing");
 	is_figure_indexing_required = false;
 }
 
 
 
 std::optional<IndexedData> Document::find_reference_with_string(std::wstring reference_name) {
-	LOG("Document::find_reference_with_string");
 	if (reference_indices.find(reference_name) != reference_indices.end()) {
 		return reference_indices[reference_name];
 	}
@@ -1130,7 +1091,6 @@ std::optional<IndexedData> Document::find_reference_with_string(std::wstring ref
 }
 
 std::optional<IndexedData> Document::find_equation_with_string(std::wstring equation_name, int page_number) {
-	LOG("Document::find_equation_with_string");
 	if (equation_indices.find(equation_name) != equation_indices.end()) {
 		const std::vector<IndexedData> equations = equation_indices[equation_name];
 		int min_distance = 10000;
@@ -1153,7 +1113,6 @@ std::optional<IndexedData> Document::find_equation_with_string(std::wstring equa
 
 
 std::optional<std::wstring> Document::get_equation_text_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y) {
-	LOG("Document::get_equation_text_at_position");
 
 
 	std::wregex regex(L"\\([0-9]+(\\.[0-9]+)*\\)");
@@ -1168,7 +1127,6 @@ std::optional<std::wstring> Document::get_equation_text_at_position(const std::v
 }
 
 std::optional<std::wstring> Document::get_regex_match_at_position(const std::wregex& regex, const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y){
-	LOG("Document::get_regex_match_at_position");
 	fz_rect selected_rect;
 	selected_rect.x0 = offset_x - 0.1f;
 	selected_rect.x1 = offset_x + 0.1f;
@@ -1192,7 +1150,6 @@ std::optional<std::wstring> Document::get_regex_match_at_position(const std::wre
 }
 
 bool Document::find_generic_location(const std::wstring& type, const std::wstring& name, int* page, float* y_offset) {
-	LOG("Document::find_generic_location");
 	int best_page = -1;
 	int best_y_offset = 0.0f;
 	float best_score = -1000;
@@ -1226,12 +1183,10 @@ bool Document::find_generic_location(const std::wstring& type, const std::wstrin
 }
 
 bool Document::can_use_highlights() {
-	LOG("Document::can_use_highlights");
 	return are_highlights_loaded;
 }
 
 std::optional<std::pair<std::wstring, std::wstring>> Document::get_generic_link_name_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y) {
-	LOG("std::wstring>> Document::get_generic_link_name_at_position");
 	std::wregex regex(L"[a-zA-Z]{3,}[ \t]+[0-9]+(\.[0-9]+)*");
 	std::optional<std::wstring> match_string = get_regex_match_at_position(regex, flat_chars, offset_x, offset_y);
 	if (match_string) {
@@ -1254,7 +1209,6 @@ std::optional<std::pair<std::wstring, std::wstring>> Document::get_generic_link_
 }
 
 std::optional<std::wstring> Document::get_reference_text_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y) {
-	LOG("Document::get_reference_text_at_position");
 	fz_rect selected_rect;
 
 	selected_rect.x0 = offset_x - 0.1f;
@@ -1315,7 +1269,6 @@ std::optional<std::wstring> Document::get_reference_text_at_position(const std::
 }
 
 void get_matches(std::wstring haystack, const std::wregex& reg, std::vector<std::pair<int, int>>& indices) {
-	LOG("get_matches");
 	std::wsmatch match;
 
 	int offset = 0;
@@ -1333,7 +1286,6 @@ void get_matches(std::wstring haystack, const std::wregex& reg, std::vector<std:
 }
 
 std::optional<std::wstring> Document::get_text_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y) {
-	LOG("Document::get_text_at_position");
 
 	fz_rect selected_rect;
 
@@ -1366,7 +1318,6 @@ std::optional<std::wstring> Document::get_text_at_position(const std::vector<fz_
 }
 
 std::optional<std::wstring> Document::get_paper_name_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y) {
-	LOG("Document::get_paper_name_at_position");
 	fz_rect selected_rect;
 
 	selected_rect.x0 = offset_x - 0.1f;
@@ -1405,7 +1356,6 @@ std::optional<std::wstring> Document::get_paper_name_at_position(const std::vect
 }
 
 fz_pixmap* Document::get_small_pixmap(int page) {
-	LOG("Document::get_small_pixmap");
 	for (auto [cached_page, pixmap] : cached_small_pixmaps) {
 		if (cached_page == page) {
 			return pixmap;
@@ -1426,33 +1376,36 @@ fz_pixmap* Document::get_small_pixmap(int page) {
 	return res;
 }
 
-void Document::get_text_selection(fz_point selection_begin,
-	fz_point selection_end,
+void Document::get_text_selection(AbsoluteDocumentPos selection_begin,
+	AbsoluteDocumentPos selection_end,
 	bool is_word_selection, // when in word select mode, we select entire words even if the range only partially includes the word
 	std::vector<fz_rect>& selected_characters,
 	std::wstring& selected_text) {
-	LOG("Document::get_text_selection");
 	get_text_selection(context, selection_begin, selection_end, is_word_selection, selected_characters, selected_text);
 }
-void Document::get_text_selection(fz_context* ctx, fz_point selection_begin,
-	fz_point selection_end,
+void Document::get_text_selection(fz_context* ctx, AbsoluteDocumentPos selection_begin,
+	AbsoluteDocumentPos selection_end,
 	bool is_word_selection,
 	std::vector<fz_rect>& selected_characters,
 	std::wstring& selected_text) {
-	LOG("Document::get_text_selection");
-
-	// selected_characters are in absolute document space
-	int page_begin, page_end;
-	fz_rect page_rect;
 
 	selected_characters.clear();
 	selected_text.clear();
 
+
+	DocumentPos page_pos1 = absolute_to_page_pos(selection_begin);
+	DocumentPos page_pos2 = absolute_to_page_pos(selection_end);
+
+	int page_begin, page_end;
 	fz_point page_point1;
 	fz_point page_point2;
 
-	absolute_to_page_pos(selection_begin.x, selection_begin.y, &page_point1.x, &page_point1.y, &page_begin);
-	absolute_to_page_pos(selection_end.x, selection_end.y, &page_point2.x, &page_point2.y, &page_end);
+	page_begin = page_pos1.page;
+	page_end = page_pos2.page;
+	page_point1.x = page_pos1.x;
+	page_point2.x = page_pos2.x;
+	page_point1.y = page_pos1.y;
+	page_point2.y = page_pos2.y;
 
 	if ((page_begin == -1) || (page_end == -1)) {
 		return;
@@ -1619,9 +1572,7 @@ void Document::embed_annotations(std::wstring new_file_path) {
 	}
 
 	for (auto bookmark : doc_bookmarks) {
-		int page_number;
-		float doc_x, doc_y;
-		absolute_to_page_pos(0, bookmark.y_offset, &doc_x, &doc_y, &page_number);
+		auto [page_number, doc_x, doc_y] = absolute_to_page_pos({ 0, bookmark.y_offset });
 
 		fz_page* page = load_cached_page(page_number);
 		pdf_page* pdf_page = pdf_page_from_fz_page(context, page);
@@ -1851,7 +1802,7 @@ std::vector<fz_rect> Document::get_highlighted_character_masks(int page) {
 		auto fastread_highlights = fastread_highlights_.value();
 
 		if (fastread_highlights.size() != flat_chars.size()) {
-			std::wcout << L"invalid highlight received\n";
+			std::wcout << L"Error: invalid highlight received\n";
 			return res;
 		}
 
@@ -1934,7 +1885,180 @@ std::optional<std::string> Document::get_page_fastread_highlights(int page) {
 		postData.addQueryItem("context_size", QString::number(TEXT_SUMMARY_CONTEXT_SIZE));
 
 
-        network_access_manager->post(request, postData.toString(QUrl::FullyEncoded).toUtf8());
+		if (network_access_manager != nullptr) {
+			network_access_manager->post(request, postData.toString(QUrl::FullyEncoded).toUtf8());
+		}
 		return {};
 	}
+}
+
+fz_rect Document::get_page_rect_no_cache(int page_number) {
+	fz_rect res = {0};
+	fz_try(context) {
+		int n_pages = num_pages();
+		if (page_number < n_pages) {
+			fz_page* page = fz_load_page(context, doc, page_number);
+			fz_rect bound = fz_bound_page(context, page);
+			res = bound;
+			fz_drop_page(context, page);
+		}
+	}
+	fz_catch(context) {
+
+	}
+	return res;
+}
+
+void DocumentManager::free_document(Document* document) {
+	bool found = false;
+	std::wstring path_to_erase;
+
+	for (auto [path, doc] : cached_documents) {
+		if (doc == document) {
+			found = true;
+			path_to_erase = path;
+		}
+	}
+	if (found) {
+		cached_documents.erase(path_to_erase);
+	}
+
+	delete document;
+}
+
+std::optional<PdfLink> Document::get_link_in_pos(const DocumentPos& pos) {
+	return get_link_in_pos(pos.page, pos.x, pos.y);
+}
+
+std::optional<PdfLink> Document::get_link_in_pos(int page, float doc_x, float doc_y){
+	if (!doc) return {};
+
+	if (page != -1) {
+		fz_link* links = get_page_links(page);
+		fz_point point = { doc_x, doc_y };
+		std::optional<PdfLink> res = {};
+
+		bool found = false;
+		while (links != nullptr) {
+			if (fz_is_point_inside_rect(point, links->rect)) {
+				res = { links->rect, links->uri };
+				return res;
+			}
+			links = links->next;
+		}
+
+	}
+	return {};
+}
+
+int Document::add_stext_page_to_created_toc(fz_stext_page* stext_page,
+	int page_number,
+	std::vector<TocNode*>& toc_node_stack,
+	std::vector<TocNode*>& top_level_nodes) {
+
+	int num_new_entries = 0;
+	auto add_toc_node = [&](TocNode* node) {
+		if (toc_node_stack.size() == 0) {
+			top_level_nodes.push_back(node);
+			toc_node_stack.push_back(node);
+		}
+		else {
+			bool are_same = false;
+			// pop until we reach a parent of stack is empty
+			while ((toc_node_stack.size() > 0) &&
+				(!is_title_parent_of(toc_node_stack[toc_node_stack.size() - 1]->title, node->title, &are_same)) &&
+				(!are_same)) { // ignore items with the same name as current parent (happens when title of chapter is written on top of pages)
+				toc_node_stack.pop_back();
+			}
+
+			if (are_same) return;
+			num_new_entries += 1;
+
+			if (toc_node_stack.size() > 0) {
+				toc_node_stack[toc_node_stack.size() - 1]->children.push_back(node);
+			}
+			else {
+				toc_node_stack.push_back(node);
+				top_level_nodes.push_back(node);
+			}
+		}
+	};
+
+	LL_ITER(block, stext_page->first_block) {
+		std::vector<fz_stext_char*> chars;
+		get_flat_chars_from_block(block, chars);
+		if (chars.size() > 0) {
+			std::wstring block_string;
+			std::vector<int> indices;
+			get_text_from_flat_chars(chars, block_string, indices);
+			if (is_string_titlish(block_string)) {
+				TocNode* new_node = new TocNode;
+				new_node->page = page_number;
+				new_node->title = block_string;
+				new_node->x = 0;
+				new_node->y = block->bbox.y0;
+				add_toc_node(new_node);
+			}
+		}
+	}
+	return num_new_entries;
+}
+
+float Document::document_to_absolute_y(int page, float doc_y) {
+	if ((page < accum_page_heights.size()) && (page >= 0)) {
+		return doc_y + accum_page_heights[page];
+	}
+	return 0;
+}
+
+void Document::get_ith_next_line_from_absolute_y(float absolute_y, int i, bool cont, float* out_begin, float* out_end) {
+	auto [page, doc_x, doc_y] = absolute_to_page_pos({ 0, absolute_y });
+
+	fz_pixmap* pixmap = get_small_pixmap(page);
+	std::vector<unsigned int> hist = get_max_width_histogram_from_pixmap(pixmap);
+	std::vector<unsigned int> line_locations;
+	std::vector<unsigned int> line_locations_begins;
+	get_line_begins_and_ends_from_histogram(hist, line_locations_begins, line_locations);
+	int small_doc_y = static_cast<int>(doc_y * SMALL_PIXMAP_SCALE);
+
+	int index = find_nth_larger_element_in_sorted_list(line_locations, static_cast<unsigned int>(small_doc_y - 0.3f), i);
+
+	if (index > -1) {
+		int best_vertical_loc = line_locations[index];
+		int best_vertical_loc_begin = line_locations_begins[index];
+
+		float best_vertical_loc_doc_pos = best_vertical_loc / SMALL_PIXMAP_SCALE;
+		float best_vertical_loc_begin_doc_pos = best_vertical_loc_begin / SMALL_PIXMAP_SCALE;
+
+		float abs_doc_y = document_to_absolute_y(page, best_vertical_loc_doc_pos);
+		float abs_doc_begin_y = document_to_absolute_y(page, best_vertical_loc_begin_doc_pos);
+		*out_begin = abs_doc_begin_y;
+		*out_end = abs_doc_y;
+	}
+	else {
+		if (!cont) {
+			*out_begin = absolute_y;
+			*out_end = absolute_y;
+			return;
+		}
+
+		int next_page;
+		if (i > 0) {
+			//next_page = main_document_view->get_current_page_number() + 1;
+			next_page = get_offset_page_number(absolute_y) + 1;
+			if (next_page < num_pages()) {
+				return get_ith_next_line_from_absolute_y(get_accum_page_height(next_page) + 0.5, 1, false, out_begin, out_end);
+			}
+		}
+		else {
+			next_page = get_offset_page_number(absolute_y);
+			if (next_page > 0) {
+				return get_ith_next_line_from_absolute_y(get_accum_page_height(next_page) - 0.5f, -1, false, out_begin, out_end);
+			}
+		}
+		*out_begin = absolute_y;
+		*out_end = absolute_y;
+		return;
+	}
+
 }

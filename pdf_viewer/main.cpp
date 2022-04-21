@@ -1,14 +1,3 @@
-//todo: cleanup the code
-//todo: tests!
-//todo: clean up parsing code
-//todo: simplify word selection logic (also avoid inefficient extra insertions followed by clears in selected_characters)
-//todo: make it so that all commands that change document state (for example goto_offset_withing_page, goto_link, etc.) do not change the document
-// state, instead they return a DocumentViewState object that is then applied using push_state and change_state functions
-// (chnage state should be a function that just applies the state without pushing it to history)
-//todo: handle input errors in command line parsing
-//todo: fix configure_paths for MacOS
-//todo: highlight sometimes doesn't work
-
 #include <iostream>
 #include <vector>
 #include <string>
@@ -75,6 +64,7 @@
 #include "RunGuard.h"
 #include "checksum.h"
 #include "OpenWithApplication.h"
+#include "new_file_checker.h"
 
 #define FTS_FUZZY_MATCH_IMPLEMENTATION
 #include "fts_fuzzy_match.h"
@@ -100,6 +90,7 @@ std::wstring EXECUTE_COMMANDS[26];
 std::wstring TEXT_HIGHLIGHT_URL = L"http://localhost:5000/";
 std::wstring MIDDLE_CLICK_SEARCH_ENGINE = L"s";
 std::wstring SHIFT_MIDDLE_CLICK_SEARCH_ENGINE = L"l";
+std::wstring PAPERS_FOLDER_PATH = L"";
 float HIGHLIGHT_COLORS[26 * 3] = { \
 0.5182963463943647, 0.052279561076773784, 0.42942409252886155, \
 0.673198309637537, 0.14250443697242887, 0.1842972533900342, \
@@ -176,6 +167,9 @@ int HELPER_WINDOW_MOVE[2] = { -1, -1 };
 float TOUCHPAD_SENSITIVITY = 1.0f;
 int SINGLE_MAIN_WINDOW_SIZE[2] = { -1, -1 };
 int SINGLE_MAIN_WINDOW_MOVE[2] = { -1, -1 };
+bool ENABLE_EXPERIMENTAL_FEATURES = false;
+bool CREATE_TABLE_OF_CONTENTS_IF_NOT_EXISTS = true;
+int MAX_CREATED_TABLE_OF_CONTENTS_SIZE = 5000;
 
 float PAGE_SEPARATOR_WIDTH = 0.0f;
 float PAGE_SEPARATOR_COLOR[3] = {0.9f, 0.9f, 0.9f};
@@ -190,6 +184,8 @@ Path global_database_file_path(L"");
 Path tutorial_path(L"");
 Path last_opened_file_address_path(L"");
 Path shader_path(L"");
+Path auto_config_path(L"");
+
 
 QStringList convert_arguments(QStringList input_args){
     // convert the relative path of filename (if it exists) to absolute path
@@ -228,7 +224,6 @@ void configure_paths(){
 	std::string exe_path = utf8_encode(QCoreApplication::applicationFilePath().toStdWString());
 
 	shader_path = parent_path.slash(L"shaders");
-
 
 
 #ifdef Q_OS_LINUX
@@ -314,6 +309,8 @@ void configure_paths(){
 #endif
 
 #endif
+	auto_config_path = standard_data_path.slash(L"auto.config");
+	// user_config_paths.insert(user_config_paths.begin(), auto_config_path);
 }
 
 void verify_paths(){
@@ -382,7 +379,7 @@ int main(int argc, char* args[]) {
 	configure_paths();
 	verify_paths();
 
-	ConfigManager config_manager(default_config_path, user_config_paths);
+	ConfigManager config_manager(default_config_path, auto_config_path, user_config_paths);
 
 	if (SHARED_DATABASE_PATH.size() > 0) {
 		global_database_file_path = SHARED_DATABASE_PATH;
@@ -468,6 +465,7 @@ int main(int argc, char* args[]) {
 	QFileSystemWatcher key_file_watcher;
 	add_paths_to_file_system_watcher(key_file_watcher, default_keys_path, user_keys_paths);
 
+
 	MainWidget main_widget(mupdf_context, &db_manager, &document_manager, &config_manager, &input_handler, &checksummer, &quit);
 
 	if (DEFAULT_DARK_MODE) {
@@ -477,6 +475,7 @@ int main(int argc, char* args[]) {
 	QString startup_commands_list = QString::fromStdWString(STARTUP_COMMANDS);
 	QStringList startup_commands = startup_commands_list.split(";");
 	CommandManager* command_manager = main_widget.get_command_manager();
+	NewFileChecker new_file_checker(PAPERS_FOLDER_PATH, &main_widget);
 
 	for (auto command : startup_commands) {
 		main_widget.handle_command(command_manager->get_command_with_name(command.toStdString()), 1);
@@ -492,7 +491,16 @@ int main(int argc, char* args[]) {
 		}
 	}
 
-	main_widget.apply_window_params_for_one_window_mode();
+
+	main_widget.topLevelWidget()->resize(500, 500);
+
+	if (HELPER_WINDOW_SIZE[0] > -1) {
+		main_widget.apply_window_params_for_two_window_mode();
+	}
+	else {
+		main_widget.apply_window_params_for_one_window_mode();
+	}
+
 	main_widget.show();
 
 	main_widget.handle_args(app.arguments());
@@ -505,7 +513,7 @@ int main(int argc, char* args[]) {
     // live reload the config files
 	QObject::connect(&pref_file_watcher, &QFileSystemWatcher::fileChanged, [&]() {
 
-		config_manager.deserialize(default_config_path, user_config_paths);
+		config_manager.deserialize(default_config_path, auto_config_path, user_config_paths);
 
 		ConfigFileChangeListener::notify_config_file_changed(&config_manager);
 		main_widget.validate_render();
@@ -516,6 +524,7 @@ int main(int argc, char* args[]) {
 		input_handler.reload_config_files(default_keys_path, user_keys_paths);
 		add_paths_to_file_system_watcher(key_file_watcher, default_keys_path, user_keys_paths);
 		});
+
 
 	if (SHOULD_CHECK_FOR_LATEST_VERSION_ON_STARTUP) {
 		check_for_updates(&main_widget, APPLICATION_VERSION);
