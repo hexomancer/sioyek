@@ -1113,6 +1113,7 @@ void MainWidget::handle_right_click(WindowPos click_pos, bool down) {
 
     if ((down == true) && opengl_widget->get_overview_page()) {
         opengl_widget->set_overview_page({});
+        main_document_view->set_line_index(-1);
         invalidate_render();
         return;
     }
@@ -2472,6 +2473,7 @@ void MainWidget::visual_mark_under_pos(WindowPos pos){
         WindowPos window_pos = main_document_view->document_to_window_pos_in_pixels({document_pos.page, 0, best_vertical_loc_doc_pos});
         auto [abs_doc_x, abs_doc_y] = main_document_view->window_to_absolute_document_pos(window_pos);
         main_document_view->set_vertical_line_pos(abs_doc_y, abs_doc_x);
+        main_document_view->set_line_index(main_document_view->get_line_index_of_vertical_pos());
         validate_render();
     }
 }
@@ -2760,6 +2762,10 @@ bool MainWidget::focus_on_visual_mark_pos(bool moving_down) {
     float thresh = 1 - VISUAL_MARK_NEXT_PAGE_THRESHOLD;
     main_document_view->absolute_to_window_pos(0, main_document_view->get_vertical_line_end_pos(), &window_x, &window_y);
     //if ((window_y < -thresh) || (window_y > thresh)) {
+    if (window_y < -1 || window_y > 1) {
+        main_document_view->goto_vertical_line_pos();
+        return true;
+    }
     if ((moving_down && (window_y < -thresh)) || ((!moving_down) && (window_y > thresh))) {
         main_document_view->goto_vertical_line_pos();
         //float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION;
@@ -2818,14 +2824,18 @@ void MainWidget::execute_command(std::wstring command) {
         // %n should be filled with the first argument and so on. what follows is a hack to get around this
 
         for (int i = 0; i < command_parts.size(); i++) {
-            bool part_requires_only_second = (command_parts[i].arg("%1", "%2") != command_parts[i]);
+            command_parts[i].replace("%1", qfile_path);
+            command_parts[i].replace("%2", qfile_name);
+            command_parts[i].replace("%3", QString::fromStdWString(selected_text));
+            command_args.push_back(command_parts[i]);
 
-            if (part_requires_only_second) {
-                command_args.push_back(command_parts.at(i).arg(qfile_name));
-            }
-            else {
-                command_args.push_back(command_parts.at(i).arg(qfile_path, qfile_name));
-            }
+            //bool part_requires_only_second = (command_parts[i].arg("%1", "%2") != command_parts[i]);
+            //if (part_requires_only_second) {
+            //    command_args.push_back(command_parts.at(i).arg(qfile_name));
+            //}
+            //else {
+            //    command_args.push_back(command_parts.at(i).arg(qfile_path, qfile_name));
+            //}
         }
 
         run_command(command_name.toStdWString(), command_args.join(" ").toStdWString(), false);
@@ -3227,9 +3237,14 @@ void MainWidget::changeEvent(QEvent* event) {
 }
 
 void MainWidget::move_visual_mark_down() {
-	float new_pos, new_begin_pos;
-	doc()->get_ith_next_line_from_absolute_y(main_document_view->get_vertical_line_end_pos(), 2, true, &new_begin_pos, &new_pos);
-	main_document_view->set_vertical_line_pos(new_pos, new_begin_pos);
+
+    int prev_line_index = main_document_view->get_line_index();
+    float begin, end;
+    int new_line_index, new_page;
+    int vertical_line_page = main_document_view->get_vertical_line_page();
+    doc()->get_ith_next_line_from_absolute_y(vertical_line_page, prev_line_index, 1, true, &begin, &end, &new_line_index, &new_page);
+    main_document_view->set_line_index(new_line_index);
+	main_document_view->set_vertical_line_pos(end, begin);
 	if (focus_on_visual_mark_pos(true)) {
 		float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
 		main_document_view->move_absolute(0, distance);
@@ -3237,14 +3252,27 @@ void MainWidget::move_visual_mark_down() {
 }
 
 void MainWidget::move_visual_mark_up() {
-	float new_pos, new_begin_pos;
-	doc()->get_ith_next_line_from_absolute_y(main_document_view->get_vertical_line_end_pos(), 0, true, &new_begin_pos, &new_pos);
-	main_document_view->set_vertical_line_pos(new_pos, new_begin_pos);
+    int prev_line_index = main_document_view->get_line_index();
+    float begin, end;
+    int new_line_index, new_page;
+    int vertical_line_page = main_document_view->get_vertical_line_page();
+    doc()->get_ith_next_line_from_absolute_y(vertical_line_page, prev_line_index, -1, true, &begin, &end, &new_line_index, &new_page);
+    main_document_view->set_line_index(new_line_index);
+	main_document_view->set_vertical_line_pos(end, begin);
 	if (focus_on_visual_mark_pos(false)) {
 		float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
-		main_document_view->move_absolute(0, -distance);
+		main_document_view->move_absolute(0, distance);
 	}
 }
+//void MainWidget::move_visual_mark_up() {
+//	float new_pos, new_begin_pos;
+//	doc()->get_ith_next_line_from_absolute_y(main_document_view->get_vertical_line_end_pos(), -2, true, &new_begin_pos, &new_pos);
+//	main_document_view->set_vertical_line_pos(new_pos, new_begin_pos);
+//	if (focus_on_visual_mark_pos(false)) {
+//		float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
+//		main_document_view->move_absolute(0, -distance);
+//	}
+//}
 
 bool MainWidget::is_visual_mark_mode() {
     return opengl_widget->get_should_draw_vertical_line();
