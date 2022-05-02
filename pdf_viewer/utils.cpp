@@ -100,6 +100,10 @@ bool range_intersects(float range1_start, float range1_end, float range2_start, 
 	return true;
 }
 
+bool rects_intersect(fz_rect rect1, fz_rect rect2) {
+	return range_intersects(rect1.x0, rect1.x1, rect2.x0, rect2.x1) && range_intersects(rect1.y0, rect1.y1, rect2.y0, rect2.y1);
+}
+
 ParsedUri parse_uri(std::string uri) {
 	int comma_index = -1;
 
@@ -779,7 +783,13 @@ void run_command(std::wstring command, std::wstring parameters, bool wait){
 #ifdef Q_OS_WIN
 	SHELLEXECUTEINFO ShExecInfo = { 0 };
 	ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
-	ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+	if (wait) {
+		ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+	}
+	else {
+		ShExecInfo.fMask = SEE_MASK_ASYNCOK;
+	}
+
 	ShExecInfo.hwnd = NULL;
 	ShExecInfo.lpVerb = NULL;
 	ShExecInfo.lpFile = command.c_str();
@@ -790,8 +800,10 @@ void run_command(std::wstring command, std::wstring parameters, bool wait){
 	ShExecInfo.lpParameters = parameters.c_str();
 
 	ShellExecuteExW(&ShExecInfo);
-	WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
-	CloseHandle(ShExecInfo.hProcess);
+	if (wait) {
+		WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+		CloseHandle(ShExecInfo.hProcess);
+	}
 #else
 	QProcess* process = new QProcess;
 	QString qcommand = QString::fromStdWString(command);
@@ -885,6 +897,15 @@ void get_text_from_flat_chars(const std::vector<fz_stext_char*>& flat_chars, std
 	}
 }
 
+
+std::wstring find_first_regex_match(const std::wstring& haystack, const std::wstring& regex_string) {
+	std::wregex regex(regex_string);
+	std::wsmatch match;
+	if (std::regex_search(haystack, match, regex)) {
+		return match.str();
+	}
+	return L"";
+}
 
 void find_regex_matches_in_stext_page(const std::vector<fz_stext_char*>& flat_chars,
 	const std::wregex &regex,
@@ -1714,3 +1735,189 @@ bool is_title_parent_of(const std::wstring& parent_title, const std::wstring& ch
 	return true;
 }
 
+struct Range {
+	float begin;
+	float end;
+
+	float size() {
+		return end - begin;
+	}
+};
+
+Range merge_range(Range range1, Range range2) {
+	Range res;
+	res.begin = std::min(range1.begin, range2.begin);
+	res.end = std::max(range1.end, range2.end);
+	return res;
+}
+
+float line_num_penalty(int num) {
+	return 1.0f;
+	//if (num == 1) {
+	//	return 1.0f;
+	//}
+	//return 1.0f + static_cast<float>(num) / 5.0f;
+}
+
+float height_increase_penalty(float ratio) {
+	return  50 * ratio;
+}
+
+float width_increase_bonus(float ratio) {
+	return -50 * ratio;
+}
+
+int find_best_merge_index_for_line_index(const std::vector<fz_stext_line*>& lines,
+	const std::vector<fz_rect>& line_rects,
+	const std::vector<int> char_counts,
+	int index) {
+
+	return index;
+	int max_merged_lines = 40;
+	//Range current_range = { lines[index]->bbox.y0, lines[index]->bbox.y1 };
+	//Range current_range_x = { lines[index]->bbox.x0, lines[index]->bbox.x1 };
+	Range current_range = { line_rects[index].y0, line_rects[index].y1 };
+	Range current_range_x = { line_rects[index].x0, line_rects[index].x1 };
+	float maximum_height = current_range.size();
+	float maximum_width = current_range_x.size();
+	float min_cost = current_range.size() * line_num_penalty(1) / current_range_x.size();
+	int min_index = index;
+
+	for (int j = index + 1; (j < lines.size()) && ((j - index) < max_merged_lines); j++) {
+		float line_height = line_rects[j].y1 - line_rects[j].y0;
+		float line_width = line_rects[j].x1 - line_rects[j].x0;
+		if (line_height > maximum_height) {
+			maximum_height = line_height;
+		}
+		if (line_width > maximum_width) {
+			maximum_width = line_width;
+		}
+		if (char_counts[j] > 10) {
+			current_range = merge_range(current_range, { line_rects[j].y0, line_rects[j].y1 });
+		}
+
+		current_range_x = merge_range(current_range, { line_rects[j].x0, line_rects[j].x1 });
+
+		float cost = current_range.size() / (j - index + 1) +
+			line_num_penalty(j - index + 1) / current_range_x.size() +
+			height_increase_penalty(current_range.size() / maximum_height) +
+			width_increase_bonus(current_range_x.size() / maximum_width);
+		if (cost < min_cost) {
+			min_cost = cost;
+			min_index = j;
+		}
+	}
+	return min_index;
+}
+
+
+fz_rect get_line_rect(fz_stext_line* line) {
+	fz_rect res;
+	res.x0 = res.x1 = res.y0 = res.y1 = 0;
+
+	std::vector<float> char_x_begins;
+	std::vector<float> char_x_ends;
+	std::vector<float> char_y_begins;
+	std::vector<float> char_y_ends;
+
+	int num_chars = 0;
+	LL_ITER(chr, line->first_char) {
+		fz_rect char_rect = fz_union_rect(res, fz_rect_from_quad(chr->quad));
+		char_x_ends.push_back(char_rect.x1);
+		char_y_begins.push_back(char_rect.y0);
+		char_y_ends.push_back(char_rect.y1);
+
+		if (char_rect.x0 > 0) {
+			char_x_begins.push_back(char_rect.x0);
+		}
+		num_chars++;
+	}
+
+
+	int percentile_index = static_cast<int>(0.5f * num_chars);
+	int first_percentile_index = percentile_index;
+	int last_percentile_index = num_chars - percentile_index;
+
+	if (last_percentile_index >= num_chars) {
+		last_percentile_index = num_chars - 1;
+	}
+
+	res.x0 = *std::min_element(char_x_begins.begin(), char_x_begins.end());
+	res.x1 = *std::max_element(char_x_ends.begin(), char_x_ends.end());
+	//res.y0 = *std::min_element(char_y_begins.begin(), char_y_begins.end());
+	//res.y1 = *std::max_element(char_y_ends.begin(), char_y_ends.end());
+
+	std::nth_element(char_y_begins.begin(), char_y_begins.begin() + first_percentile_index, char_y_begins.end());
+	std::nth_element(char_y_ends.begin(), char_y_ends.begin() + last_percentile_index, char_y_ends.end());
+
+	res.y0 = *(char_y_begins.begin() + first_percentile_index);
+	res.y1 = *(char_y_ends.begin() + last_percentile_index);
+
+	return res;
+}
+
+int line_num_chars(fz_stext_line* line) {
+	int res = 0;
+	LL_ITER(chr, line->first_char) {
+		res++;
+	}
+	return res;
+}
+
+
+void merge_lines(const std::vector<fz_stext_line*>& lines_, std::vector<fz_rect>& out_rects, std::vector<std::wstring>& out_texts) {
+
+	std::vector<fz_stext_line*> lines = lines_;
+
+	std::vector<fz_rect> temp_rects;
+	std::vector<std::wstring> temp_texts;
+
+	std::vector<fz_rect> custom_line_rects;
+	std::vector<int> char_counts;
+
+	std::vector<int> indices_to_delete;
+	for (int i = 0; i < lines.size(); i++) {
+		if (line_num_chars(lines[i]) < 5) {
+			indices_to_delete.push_back(i);
+		}
+	}
+
+	for (int i = indices_to_delete.size() - 1; i >= 0; i--) {
+		lines.erase(lines.begin() + indices_to_delete[i]);
+	}
+
+	for (auto line : lines) {
+		custom_line_rects.push_back(get_line_rect(line));
+		char_counts.push_back(line_num_chars(line));
+	}
+
+	for (int i = 0; i < lines.size(); i++) {
+		fz_rect rect = custom_line_rects[i];
+		int best_index = find_best_merge_index_for_line_index(lines, custom_line_rects, char_counts, i);
+		std::wstring text = get_string_from_stext_line(lines[i]);
+		for (int j = i+1; j <= best_index; j++) {
+			rect = fz_union_rect(rect, lines[j]->bbox);
+			text = text + get_string_from_stext_line(lines[j]);
+		}
+		temp_rects.push_back(rect);
+		temp_texts.push_back(text);
+		i = best_index;
+	}
+	for (int i = 0; i < temp_rects.size(); i++) {
+		if (i > 0 && out_rects.size() > 0) {
+			fz_rect prev_rect = out_rects[out_rects.size() - 1];
+			fz_rect current_rect = temp_rects[i];
+			if ((std::abs(prev_rect.y0 - current_rect.y0) < 1.0f) || (std::abs(prev_rect.y1 - current_rect.y1) < 1.0f)) {
+				out_rects[out_rects.size() - 1].x0 = std::min(prev_rect.x0, current_rect.x0);
+				out_rects[out_rects.size() - 1].x1 = std::max(prev_rect.x1, current_rect.x1);
+
+				out_rects[out_rects.size() - 1].y0 = std::min(prev_rect.y0, current_rect.y0);
+				out_rects[out_rects.size() - 1].y1 = std::max(prev_rect.y1, current_rect.y1);
+				out_texts[out_texts.size() - 1] = out_texts[out_texts.size() - 1] + temp_texts[i];
+				continue;
+			}
+		}
+		out_rects.push_back(temp_rects[i]);
+		out_texts.push_back(temp_texts[i]);
+	}
+}
