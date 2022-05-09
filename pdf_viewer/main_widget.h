@@ -100,6 +100,8 @@ private:
 	bool is_render_invalidated = false;
 	bool is_ui_invalidated = false;
 
+	const Command* last_command = nullptr;
+
 	//std::optional<std::pair<std::wstring, int>> last_smart_fit_state = {};
 	std::optional<int> last_smart_fit_page = {};
 
@@ -257,5 +259,6 @@ public:
 	void on_new_paper_added(const std::wstring& file_path);
 	void scroll_overview_down();
 	void scroll_overview_up();
+	int get_current_page_number() const;
 
 };
