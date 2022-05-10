@@ -1190,8 +1190,13 @@ void MainWidget::handle_right_click(WindowPos click_pos, bool down) {
                         std::string line_string = std::to_string(line);
                         std::string column_string = std::to_string(column);
 
-                        QString command = QString::fromStdWString(inverse_search_command).arg(file_name, line_string.c_str(), column_string.c_str());
-                        QProcess::startDetached(command);
+                        if (inverse_search_command.size() > 0) {
+							QString command = QString::fromStdWString(inverse_search_command).arg(file_name, line_string.c_str(), column_string.c_str());
+							QProcess::startDetached(command);
+                        }
+                        else{
+                            show_error_message(L"inverse_search_command is not set in prefs_user.config");
+                        }
 
                     }
 
@@ -2627,7 +2632,7 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
         current_pending_command->name == "chapter_search" ) {
 
         // When searching, the start position before search is saved in a mark named '0'
-        main_document_view->add_mark('0');
+        main_document_view->add_mark('/');
 
         int range_begin, range_end;
         std::wstring search_term;
