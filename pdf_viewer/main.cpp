@@ -144,7 +144,8 @@ std::wstring INVERSE_SEARCH_COMMAND = L"";
 std::wstring SHARED_DATABASE_PATH = L"";
 std::wstring UI_FONT_FACE_NAME = L"";
 bool SHOULD_LOAD_TUTORIAL_WHEN_NO_OTHER_FILE = false;
-bool SHOULD_LAUNCH_NEW_INSTANCE = true;
+bool SHOULD_LAUNCH_NEW_INSTANCE = false;
+bool SHOULD_LAUNCH_NEW_WINDOW = false;
 bool SHOULD_DRAW_UNRENDERED_PAGES = true;
 bool HOVER_OVERVIEW = false;
 bool RERENDER_OVERVIEW = false;
@@ -180,6 +181,8 @@ float OVERVIEW_SIZE[2] = { 0.8f, 0.4f };
 float OVERVIEW_OFFSET[2] = { 0.0f, 0.0f };
 bool IGNORE_WHITESPACE_IN_PRESENTATION_MODE = false;
 bool EXACT_HIGHLIGHT_SELECT = false;
+bool SHOW_DOC_PATH = false;
+float FASTREAD_OPACITY = 0.5f;
 
 float PAGE_SEPARATOR_WIDTH = 0.0f;
 float PAGE_SEPARATOR_COLOR[3] = {0.9f, 0.9f, 0.9f};
@@ -479,7 +482,7 @@ MainWidget* handle_args(const QStringList& arguments) {
 
 	MainWidget* target_window = get_window_with_opened_file_path(pdf_file_name);
 
-	if ((pdf_file_name.size() > 0) && parser->isSet("new-window") && (target_window == nullptr) && (windows[0]->doc() != nullptr)) {
+	if ((pdf_file_name.size() > 0) && (parser->isSet("new-window") || SHOULD_LAUNCH_NEW_WINDOW) && (!parser->isSet("reuse-window")) && (target_window == nullptr) && (windows[0]->doc() != nullptr)) {
 		target_window = new MainWidget(windows[0]);
 		target_window->apply_window_params_for_one_window_mode(true);
 		target_window->show();

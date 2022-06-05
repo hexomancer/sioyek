@@ -15,6 +15,7 @@ extern bool SHOULD_USE_MULTIPLE_MONITORS;
 extern bool SORT_BOOKMARKS_BY_LOCATION;
 extern bool SHOULD_LOAD_TUTORIAL_WHEN_NO_OTHER_FILE;
 extern bool SHOULD_LAUNCH_NEW_INSTANCE;
+extern bool SHOULD_LAUNCH_NEW_WINDOW;
 extern bool SHOULD_CHECK_FOR_LATEST_VERSION_ON_STARTUP;
 extern bool SHOULD_DRAW_UNRENDERED_PAGES;
 extern bool HOVER_OVERVIEW;
@@ -71,6 +72,8 @@ extern float OVERVIEW_SIZE[2];
 extern float OVERVIEW_OFFSET[2];
 extern bool IGNORE_WHITESPACE_IN_PRESENTATION_MODE;
 extern bool EXACT_HIGHLIGHT_SELECT;
+extern bool SHOW_DOC_PATH;
+extern float FASTREAD_OPACITY;
 
 template<typename T>
 void* generic_deserializer(std::wstringstream& stream, void* res_) {
@@ -160,7 +163,7 @@ bool ensure_between_0_and_1(const QStringList& parts) {
 
 bool color_3_validator(const std::wstring& str) {
 	QString qstr = QString::fromStdWString(str);
-	auto parts = qstr.split(' ', Qt::SplitBehaviorFlags::SkipEmptyParts);
+	auto parts = qstr.trimmed().split(' ', Qt::SplitBehaviorFlags::SkipEmptyParts);
 	if (parts.size() != 3) {
 		std::wcout << L"Error: required 3 values for color, but got " << parts.size() << "\n";
 		return false;
@@ -173,7 +176,7 @@ bool color_3_validator(const std::wstring& str) {
 
 bool color_4_validator(const std::wstring& str) {
 	QString qstr = QString::fromStdWString(str);
-	auto parts = qstr.split(' ', Qt::SplitBehaviorFlags::SkipEmptyParts);
+	auto parts = qstr.trimmed().split(' ', Qt::SplitBehaviorFlags::SkipEmptyParts);
 	if (parts.size() != 4) {
 		std::wcout << L"Error: required 4 values for color, but got " << parts.size() << "\n";
 		return false;
@@ -186,7 +189,7 @@ bool color_4_validator(const std::wstring& str) {
 
 bool bool_validator(const std::wstring& str) {
 	QString qstr = QString::fromStdWString(str);
-	auto parts = qstr.split(' ', Qt::SplitBehaviorFlags::SkipEmptyParts);
+	auto parts = qstr.trimmed().split(' ', Qt::SplitBehaviorFlags::SkipEmptyParts);
 	int is_correct = true;
 	std::wstring msg = L"Bool values should be either 0 or 1, but got ";
 	if (parts.size() != 1) {
@@ -238,6 +241,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 	configs.push_back({ L"should_use_multiple_monitors", &SHOULD_USE_MULTIPLE_MONITORS, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"should_load_tutorial_when_no_other_file", &SHOULD_LOAD_TUTORIAL_WHEN_NO_OTHER_FILE, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"should_launch_new_instance", &SHOULD_LAUNCH_NEW_INSTANCE, bool_serializer, bool_deserializer, bool_validator });
+	configs.push_back({ L"should_launch_new_window", &SHOULD_LAUNCH_NEW_WINDOW, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"should_draw_unrendered_pages", &SHOULD_DRAW_UNRENDERED_PAGES, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"check_for_updates_on_startup", &SHOULD_CHECK_FOR_LATEST_VERSION_ON_STARTUP, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"sort_bookmarks_by_location", &SORT_BOOKMARKS_BY_LOCATION, bool_serializer, bool_deserializer, bool_validator });
@@ -287,6 +291,8 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 	configs.push_back({ L"overview_offset", &OVERVIEW_OFFSET, fvec2_serializer, fvec2_deserializer, nullptr });
 	configs.push_back({ L"ignore_whitespace_in_presentation_mode", &IGNORE_WHITESPACE_IN_PRESENTATION_MODE, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"exact_highlight_select", &EXACT_HIGHLIGHT_SELECT, bool_serializer, bool_deserializer, bool_validator });
+	configs.push_back({ L"show_doc_path", &SHOW_DOC_PATH, bool_serializer, bool_deserializer, bool_validator });
+	configs.push_back({ L"fastread_opacity", &FASTREAD_OPACITY, float_serializer, float_deserializer, nullptr });
 
 	std::wstring highlight_config_string = L"highlight_color_a";
 	std::wstring search_url_config_string = L"search_url_a";

@@ -89,6 +89,7 @@ extern float OVERVIEW_SIZE[2];
 extern float OVERVIEW_OFFSET[2];
 extern bool IGNORE_WHITESPACE_IN_PRESENTATION_MODE;
 extern std::vector<MainWidget*> windows;
+extern bool SHOW_DOC_PATH;
 
 bool MainWidget::main_document_view_has_document()
 {
@@ -110,7 +111,9 @@ void MainWidget::resizeEvent(QResizeEvent* resize_event) {
         int status_bar_height = get_status_bar_height();
         status_label->move(0, main_window_height - status_bar_height);
         status_label->resize(main_window_width, status_bar_height);
-        status_label->show();
+        if (should_show_status_label) {
+			status_label->show();
+        }
     }
 
     if ((main_document_view->get_document() != nullptr) && (main_document_view->get_zoom_level() == 0)) {
@@ -1026,7 +1029,7 @@ void MainWidget::key_event(bool released, QKeyEvent* kevent) {
             handle_escape();
         }
 
-        if (kevent->key() == Qt::Key::Key_Return) {
+        if (kevent->key() == Qt::Key::Key_Return || kevent->key() == Qt::Key::Key_Enter) {
             if (text_command_line_edit_container->isVisible()) {
                 text_command_line_edit_container->hide();
                 setFocus();
@@ -1752,6 +1755,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
             checksummer,
             should_quit);
         new_widget->open_document(main_document_view->get_state());
+        new_widget->show();
         windows.push_back(new_widget);
     }
 
@@ -1938,7 +1942,12 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         for (const auto& doc_hash_ : opened_docs_hashes_) {
             std::optional<std::wstring> path = checksummer->get_path(utf8_encode(doc_hash_));
             if (path) {
-                opened_docs_names.push_back(Path(path.value()).filename().value_or(L"<ERROR>"));
+                if (SHOW_DOC_PATH) {
+                    opened_docs_names.push_back(path.value_or(L"<ERROR>"));
+                }
+                else {
+					opened_docs_names.push_back(Path(path.value()).filename().value_or(L"<ERROR>"));
+                }
                 opened_docs_hashes.push_back(utf8_encode(doc_hash_));
             }
         }
@@ -2358,6 +2367,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
     }
     else if (command->name == "toggle_fastread") {
 		opengl_widget->toggle_fastread_mode();
+	}
+    else if (command->name == "toggle_statusbar") {
+		toggle_statusbar();
 	}
     else if (command->name == "smart_jump_under_cursor") {
         QPoint mouse_pos = mapFromGlobal(QCursor::pos());
@@ -3382,5 +3394,16 @@ void MainWidget::focusInEvent(QFocusEvent* ev) {
     }
     if (index > 0) {
         std::swap(windows[0], windows[index]);
+    }
+}
+
+void MainWidget::toggle_statusbar() {
+    should_show_status_label = !should_show_status_label;
+
+    if (!should_show_status_label) {
+        status_label->hide();
+    }
+    else {
+        status_label->show();
     }
 }

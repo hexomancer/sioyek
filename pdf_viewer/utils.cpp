@@ -1475,6 +1475,10 @@ QCommandLineParser* get_command_line_parser() {
 	new_window_option.setDescription("Open the file in a new window but within the same sioyek instance.");
 	parser->addOption(new_window_option);
 
+	QCommandLineOption reuse_window_option("reuse-window");
+	reuse_window_option.setDescription("Force sioyek to reuse the current window even when should_launch_new_window is set.");
+	parser->addOption(reuse_window_option);
+
 	QCommandLineOption page_option("page", "Which page to open.", "page");
 	parser->addOption(page_option);
 
@@ -1616,7 +1620,7 @@ void check_for_updates(QWidget* parent, std::string current_version) {
 QString expand_home_dir(QString path) {
 	if (path.size() > 0) {
 		if (path.at(0) == '~') {
-			return QDir::homePath() + QDir::separator() + path.remove(0, 1);
+			return QDir::homePath() + QDir::separator() + path.remove(0, 2);
 		}
 	}
 	return path;
@@ -1947,6 +1951,7 @@ void merge_lines(const std::vector<fz_stext_line*>& lines_, std::vector<fz_rect>
 		out_texts.push_back(temp_texts[i]);
 	}
 }
+
 float get_max_display_scaling() {
 	float scale = 1.0f;
 	auto screens = QGuiApplication::screens();
