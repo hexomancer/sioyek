@@ -798,7 +798,7 @@ void run_command(std::wstring command, QStringList parameters, bool wait){
 	ShExecInfo.lpFile = command.c_str();
 	ShExecInfo.lpParameters = NULL;
 	ShExecInfo.lpDirectory = NULL;
-	ShExecInfo.nShow = SW_SHOW;
+	ShExecInfo.nShow = SW_HIDE;
 	ShExecInfo.hInstApp = NULL;
 	ShExecInfo.lpParameters = parameters_string.c_str();
 
@@ -817,12 +817,12 @@ void run_command(std::wstring command, QStringList parameters, bool wait){
 	}
 	//qparameters.append(QString::fromStdWString(parameters));
 
-	process->start(qcommand, qparameters);
 	if (wait) {
+		process->start(qcommand, qparameters);
 		process->waitForFinished();
 	}
 	else {
-		QObject::connect(process, SIGNAL(finished(int)), process, SLOT(deleteLater()));
+		process->startDetached(qcommand, qparameters);
 	}
 #endif
 
