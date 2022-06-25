@@ -41,7 +41,7 @@ int argminf(const std::vector<T> &collection, std::function<float(T)> f) {
 
 	float min = std::numeric_limits<float>::infinity();
 	int min_index = -1;
-	for (int i = 0; i < collection.size(); i++) {
+	for (size_t i = 0; i < collection.size(); i++) {
 		float element_value = f(collection[i]);
 		if (element_value < min){
 			min = element_value;
@@ -161,3 +161,4 @@ bool is_title_parent_of(const std::wstring& parent_title, const std::wstring& ch
 std::wstring find_first_regex_match(const std::wstring& haystack, const std::wstring& regex_string);
 void merge_lines(const std::vector<fz_stext_line*>& lines, std::vector<fz_rect>& out_rects, std::vector<std::wstring>& out_texts);
 float get_max_display_scaling();
+int lcs(const char* X, const char* Y, int m, int n);

@@ -184,6 +184,7 @@ bool EXACT_HIGHLIGHT_SELECT = false;
 bool SHOW_DOC_PATH = false;
 float FASTREAD_OPACITY = 0.5f;
 bool SHOULD_WARN_ABOUT_USER_KEY_OVERRIDE = true;
+bool SINGLE_CLICK_SELECTS_WORDS = false;
 
 float PAGE_SEPARATOR_WIDTH = 0.0f;
 float PAGE_SEPARATOR_COLOR[3] = {0.9f, 0.9f, 0.9f};
@@ -399,7 +400,6 @@ MainWidget* get_window_with_opened_file_path(const std::wstring& file_path) {
 }
 
 std::optional<std::wstring> get_last_opened_file_name() {
-    char file_path[MAX_PATH] = { 0 };
     std::string file_path_;
     std::ifstream last_state_file(last_opened_file_address_path.get_path_utf8());
     std::getline(last_state_file, file_path_);
@@ -510,6 +510,12 @@ MainWidget* handle_args(const QStringList& arguments) {
 		 for (int i = 0; i < commands.size(); i++) {
 			 target_window->handle_command(target_window->get_command_manager()->get_command_with_name(commands.at(i).toStdString()), 1);
 		 }
+	}
+
+	if (parser->isSet("focus-text")) {
+		QString text = parser->value("focus-text");
+		int page = parser->value("focus-text-page").toInt();
+		target_window->focus_text(page, text.toStdWString());
 	}
 
     // if no file is specified, use the previous file
@@ -660,12 +666,15 @@ int main(int argc, char* args[]) {
 		if (guard.isPrimary()) {
 			QObject::connect(&guard, &RunGuard::messageReceived, [&main_widget](const QByteArray& message) {
 				QStringList args = deserialize_string_array(message);
+				bool nofocus = args.indexOf("--nofocus") != -1;
 				MainWidget* target = handle_args(args);
-				if (target) {
-					target->activateWindow();
-				}
-				else if (windows.size() > 0) {
-					windows[0]->activateWindow();
+				if (!nofocus) {
+					if (target) {
+						target->activateWindow();
+					}
+					else if (windows.size() > 0) {
+						windows[0]->activateWindow();
+					}
 				}
 				});
 		}
@@ -715,10 +724,10 @@ int main(int argc, char* args[]) {
 	quit = true;
 
 	std::vector<MainWidget*> windows_to_delete;
-	for (int i = 0; i < windows.size(); i++) {
+	for (size_t i = 0; i < windows.size(); i++) {
 		windows_to_delete.push_back(windows[i]);
 	}
-	for (int i = 0; i < windows_to_delete.size(); i++) {
+	for (size_t i = 0; i < windows_to_delete.size(); i++) {
 		delete windows_to_delete[i];
 	}
 

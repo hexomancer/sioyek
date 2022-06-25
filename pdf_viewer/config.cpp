@@ -75,6 +75,7 @@ extern bool EXACT_HIGHLIGHT_SELECT;
 extern bool SHOW_DOC_PATH;
 extern float FASTREAD_OPACITY;
 extern bool SHOULD_WARN_ABOUT_USER_KEY_OVERRIDE;
+extern bool SINGLE_CLICK_SELECTS_WORDS;
 
 template<typename T>
 void* generic_deserializer(std::wstringstream& stream, void* res_) {
@@ -191,7 +192,6 @@ bool color_4_validator(const std::wstring& str) {
 bool bool_validator(const std::wstring& str) {
 	QString qstr = QString::fromStdWString(str);
 	auto parts = qstr.trimmed().split(' ', Qt::SplitBehaviorFlags::SkipEmptyParts);
-	int is_correct = true;
 	std::wstring msg = L"Bool values should be either 0 or 1, but got ";
 	if (parts.size() != 1) {
 		std::wcout << msg << str << L"\n";
@@ -295,6 +295,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 	configs.push_back({ L"show_doc_path", &SHOW_DOC_PATH, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"fastread_opacity", &FASTREAD_OPACITY, float_serializer, float_deserializer, nullptr });
 	configs.push_back({ L"should_warn_about_user_key_override", &SHOULD_WARN_ABOUT_USER_KEY_OVERRIDE, bool_serializer, bool_deserializer, bool_validator });
+	configs.push_back({ L"single_click_selects_words", &SINGLE_CLICK_SELECTS_WORDS, bool_serializer, bool_deserializer, bool_validator });
 
 	std::wstring highlight_config_string = L"highlight_color_a";
 	std::wstring search_url_config_string = L"search_url_a";
@@ -305,9 +306,9 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 		search_url_config_string[search_url_config_string.size() - 1] = letter;
 		execute_command_config_string[execute_command_config_string.size() - 1] = letter;
 
-		configs.push_back({ highlight_config_string, &HIGHLIGHT_COLORS[(letter - 'a') * 3], vec3_serializer, vec3_deserializer });
-		configs.push_back({ search_url_config_string, &SEARCH_URLS[letter - 'a'], string_serializer, string_deserializer });
-		configs.push_back({ execute_command_config_string, &EXECUTE_COMMANDS[letter - 'a'], string_serializer, string_deserializer });
+		configs.push_back({ highlight_config_string, &HIGHLIGHT_COLORS[(letter - 'a') * 3], vec3_serializer, vec3_deserializer, nullptr });
+		configs.push_back({ search_url_config_string, &SEARCH_URLS[letter - 'a'], string_serializer, string_deserializer, nullptr });
+		configs.push_back({ execute_command_config_string, &EXECUTE_COMMANDS[letter - 'a'], string_serializer, string_deserializer, nullptr });
 	}
 
 	deserialize(default_path, auto_path, user_paths);

@@ -90,6 +90,7 @@ extern float OVERVIEW_OFFSET[2];
 extern bool IGNORE_WHITESPACE_IN_PRESENTATION_MODE;
 extern std::vector<MainWidget*> windows;
 extern bool SHOW_DOC_PATH;
+extern bool SINGLE_CLICK_SELECTS_WORDS;
 
 bool MainWidget::main_document_view_has_document()
 {
@@ -286,8 +287,6 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 
 
     inverse_search_command = INVERSE_SEARCH_COMMAND;
-    int first_screen_width = QApplication::desktop()->screenGeometry(0).width();
-
     if (DISPLAY_RESOLUTION_SCALE <= 0){
         pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, QApplication::desktop()->devicePixelRatioF());
     }
@@ -401,7 +400,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 }
 
 MainWidget::~MainWidget() {
-    for (int i = 0; i < windows.size(); i++) {
+    for (size_t i = 0; i < windows.size(); i++) {
         if (windows[i] == this) {
             windows.erase(windows.begin() + i);
             break;
@@ -1183,6 +1182,9 @@ void MainWidget::handle_left_click(WindowPos click_pos, bool down) {
 
         if (!mouse_drag_mode) {
             is_selecting = true;
+			if (SINGLE_CLICK_SELECTS_WORDS) {
+				is_word_selecting = true;
+			}
         }
         else {
             is_dragging = true;
@@ -1414,10 +1416,15 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
 }
 
 void MainWidget::mouseDoubleClickEvent(QMouseEvent* mevent) {
-    if (mevent->button() == Qt::MouseButton::LeftButton) {
-        is_selecting = true;
-        is_word_selecting = true;
-    }
+	if (mevent->button() == Qt::MouseButton::LeftButton) {
+		is_selecting = true;
+		if (SINGLE_CLICK_SELECTS_WORDS) {
+			is_word_selecting = false;
+		}
+        else {
+			is_word_selecting = true;
+		}
+	}
 }
 
 void MainWidget::mousePressEvent(QMouseEvent* mevent) {
@@ -2353,9 +2360,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         opengl_widget->rotate_counterclockwise();
     }
     else if (command->name == "debug") {
-    status_label->show();
-    int swidth = status_label->width();
-    int sheight = status_label->height();
+        status_label->show();
     }
     else if (command->name == "toggle_fastread") {
 		opengl_widget->toggle_fastread_mode();
@@ -2605,7 +2610,6 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
 
     if (current_pending_command->name == "enter_password") {
         std::string password = utf8_encode(text);
-        bool success = main_document_view->get_document()->apply_password(password.c_str());
         pdf_renderer->add_password(main_document_view->get_document()->get_path(), password);
     }
 
@@ -3387,7 +3391,7 @@ void MainWidget::set_inverse_search_command(const std::wstring& new_command) {
 
 void MainWidget::focusInEvent(QFocusEvent* ev) {
     int index = -1;
-    for (int i = 0; i < windows.size(); i++) {
+    for (size_t i = 0; i < windows.size(); i++) {
         if (windows[i] == this) {
 			index = i;
 			break;
@@ -3420,5 +3424,32 @@ void MainWidget::execute_predefined_command(char symbol) {
 			handle_command(&current_pending_command.value(), 0);
 			return;
 		}
+	}
+}
+
+void MainWidget::focus_text(int page, const std::wstring& text) {
+    std::vector<std::wstring> line_texts;
+    std::vector<fz_rect> line_rects;
+    line_rects = main_document_view->get_document()->get_page_lines(page, &line_texts);
+
+    std::string encoded_text = utf8_encode(text);
+
+    int max_score = -1;
+    int max_index = -1;
+
+    for (int i = 0; i < line_texts.size(); i++) {
+        std::string encoded_line = utf8_encode(line_texts[i]);
+        int score = lcs(encoded_text.c_str(), encoded_line.c_str(), encoded_text.size(), encoded_line.size());
+        //fts::fuzzy_match(encoded_line.c_str(), encoded_text.c_str(), score);
+        if (score > max_score) {
+            max_index = i;
+            max_score = score;
+        }
+    }
+    main_document_view->set_line_index(max_index);
+	main_document_view->set_vertical_line_rect(line_rects[max_index]);
+	if (focus_on_visual_mark_pos(true)) {
+		float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
+		main_document_view->move_absolute(0, distance);
 	}
 }
