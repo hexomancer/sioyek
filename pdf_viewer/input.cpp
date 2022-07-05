@@ -20,7 +20,7 @@ CommandManager::CommandManager() {
 	commands.push_back({ "previous_item", false, false , false, true, {}});
 	commands.push_back({ "set_mark", false, true , false, false, {}});
 	commands.push_back({ "goto_mark", false, true , false, false, {'`', '\'', '/'}});
-	commands.push_back({ "goto_page_with_page_number", true, false , false, false, {}});
+	commands.push_back({ "goto_page_with_page_number", true, false , false, true, {}});
 	commands.push_back({ "search", true, false , false, false, {}});
 	commands.push_back({ "ranged_search", true, false , false, false, {}});
 	commands.push_back({ "chapter_search", true, false , false, false, {}});
@@ -31,6 +31,7 @@ CommandManager::CommandManager() {
 	commands.push_back({ "zoom_in", false, false , false, false, {}});
 	commands.push_back({ "zoom_out", false, false , false, false, {}});
 	commands.push_back({ "fit_to_page_width", false, false , false, false, {}});
+	commands.push_back({ "fit_to_page_height", false, false , false, false, {}});
 	commands.push_back({ "fit_to_page_height_smart", false, false , false, false, {}});
 	commands.push_back({ "fit_to_page_width_smart", false, false , false, false, {}});
 	commands.push_back({ "next_page", false, false , false, false, {}});
@@ -136,6 +137,7 @@ CommandManager::CommandManager() {
 	commands.push_back({ "goto_bottom_of_page", false, false , false, false, {}});
 	commands.push_back({ "new_window", false, false , false, false, {}});
 	commands.push_back({ "toggle_statusbar", false, false , false, false, {}});
+	commands.push_back({ "reload", false, false , false, false, {}});
 
 	for (char c = 'a'; c <= 'z'; c++) {
 		commands.push_back({ "execute_command_"  +  std::string(1, c), false, false , false, false, {}});

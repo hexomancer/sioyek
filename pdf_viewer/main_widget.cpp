@@ -31,6 +31,7 @@
 #include <qprocess.h>
 #include <qguiapplication.h>
 #include <qmimedata.h>
+#include <qscreen.h>
 
 
 #include "input.h"
@@ -582,7 +583,7 @@ void MainWidget::validate_render() {
         opengl_widget->set_visible_page_number(current_page);
         main_document_view->set_offset_y(main_document_view->get_document()->get_accum_page_height(current_page) + main_document_view->get_document()->get_page_height(current_page)/2);
         if (IGNORE_WHITESPACE_IN_PRESENTATION_MODE) {
-            main_document_view->fit_to_page_height_smart();
+            main_document_view->fit_to_page_height(true);
         }
         else {
 			main_document_view->fit_to_page_height_width_minimum();
@@ -1640,6 +1641,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
                 text_command_line_edit->setText(search_range_string.str().c_str() + text_command_line_edit->text());
             }
         }
+        if (command->pushes_state) {
+            push_state();
+        }
         return;
     }
     if (command->name == "goto_begining") {
@@ -1795,6 +1799,10 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         main_document_view->fit_to_page_width();
         last_smart_fit_page = {};
     }
+    else if (command->name == "fit_to_page_height") {
+        main_document_view->fit_to_page_height();
+        last_smart_fit_page = {};
+    }
     else if (command->name == "fit_to_page_width_ratio") {
         main_document_view->fit_to_page_width(false, true);
         last_smart_fit_page = {};
@@ -1805,7 +1813,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         last_smart_fit_page = current_page;
     }
     else if (command->name == "fit_to_page_height_smart") {
-        main_document_view->fit_to_page_height_smart();
+        main_document_view->fit_to_page_height(true);
     }
 
     else if (command->name == "next_state") {
@@ -2391,6 +2399,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
     }
     else if (command->name == "toggle_horizontal_scroll_lock") {
         horizontal_scroll_locked = !horizontal_scroll_locked;
+    }
+    else if (command->name == "reload") {
+        reload();
     }
     else if (command->name == "move_visual_mark_down") {
 		if (opengl_widget->get_overview_page()) {
@@ -2987,8 +2998,8 @@ void MainWidget::get_window_params_for_two_window_mode(int* main_window_size, in
     }
     else {
         int num_screens = QApplication::desktop()->numScreens();
-        int main_window_width = QApplication::desktop()->screenGeometry(0).width();
-        int main_window_height = QApplication::desktop()->screenGeometry(0).height();
+        int main_window_width = get_current_monitor_width();
+        int main_window_height = get_current_monitor_height();
         if (num_screens > 1) {
             int second_window_width = QApplication::desktop()->screenGeometry(1).width();
             int second_window_height = QApplication::desktop()->screenGeometry(1).height();
@@ -3018,7 +3029,7 @@ void MainWidget::apply_window_params_for_one_window_mode(bool force_resize){
 
     QWidget* main_window = get_top_level_widget(opengl_widget);
 
-    int main_window_width = QApplication::desktop()->screenGeometry(0).width();
+    int main_window_width = get_current_monitor_width();
 
     int main_window_size[2];
     int main_window_move[2];
@@ -3051,7 +3062,8 @@ void MainWidget::apply_window_params_for_two_window_mode() {
     QWidget* main_window = get_top_level_widget(opengl_widget);
     QWidget* helper_window = get_top_level_widget(helper_opengl_widget);
 
-    int main_window_width = QApplication::desktop()->screenGeometry(0).width();
+    //int main_window_width = QApplication::desktop()->screenGeometry(0).width();
+    int main_window_width = get_current_monitor_width();
 
     int main_window_size[2];
     int main_window_move[2];
@@ -3123,6 +3135,7 @@ void MainWidget::dropEvent(QDropEvent* event)
         path = path.substr(7, path.size() - 7);
 #endif
         //handle_args(QStringList() << QApplication::applicationFilePath() << QString::fromStdWString(path));
+        push_state();
         open_document(path, &is_render_invalidated);
     }
 }
@@ -3313,8 +3326,8 @@ void MainWidget::return_to_last_visual_mark() {
 void MainWidget::changeEvent(QEvent* event) {
     if (event->type() == QEvent::WindowStateChange) {
         if (isMaximized()) {
-			main_window_width = QApplication::desktop()->screenGeometry(0).width();
-			main_window_height = QApplication::desktop()->screenGeometry(0).height();
+            main_window_width = get_current_monitor_width();
+            main_window_height = get_current_monitor_height();
 		}
     }
     QWidget::changeEvent(event);
@@ -3452,4 +3465,28 @@ void MainWidget::focus_text(int page, const std::wstring& text) {
 		float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
 		main_document_view->move_absolute(0, distance);
 	}
+}
+int MainWidget::get_current_monitor_width() {
+    if (this->window()->windowHandle() != nullptr) {
+		return this->window()->windowHandle()->screen()->geometry().width();
+    }
+    else {
+		return QApplication::desktop()->screenGeometry(0).width();
+    }
+}
+
+int MainWidget::get_current_monitor_height() {
+    if (this->window()->windowHandle() != nullptr) {
+		return this->window()->windowHandle()->screen()->geometry().height();
+    }
+    else {
+		return QApplication::desktop()->screenGeometry(0).height();
+    }
+}
+
+void MainWidget::reload() {
+    pdf_renderer->delete_old_pages(true, true);
+    if (doc()) {
+		doc()->reload();
+    }
 }
