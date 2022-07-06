@@ -82,7 +82,7 @@ std::string LOG_FILE_NAME = "sioyek_log.txt";
 std::ofstream LOG_FILE;
 int FONT_SIZE = -1;
 int STATUS_BAR_FONT_SIZE = -1;
-std::string APPLICATION_VERSION = "1.3.0";
+std::string APPLICATION_VERSION = "1.4.0";
 float BACKGROUND_COLOR[3] = { 1.0f, 1.0f, 1.0f };
 float DARK_MODE_BACKGROUND_COLOR[3] = { 0.0f, 0.0f, 0.0f };
 float CUSTOM_BACKGROUND_COLOR[3] = { 1.0f, 1.0f, 1.0f };
@@ -200,6 +200,11 @@ Path tutorial_path(L"");
 Path last_opened_file_address_path(L"");
 Path shader_path(L"");
 Path auto_config_path(L"");
+
+std::wstring SHIFT_CLICK_COMMAND = L"overview_under_cursor";
+std::wstring CONTROL_CLICK_COMMAND = L"smart_jump_under_cursor";
+std::wstring SHIFT_RIGHT_CLICK_COMMAND = L"";
+std::wstring CONTROL_RIGHT_CLICK_COMMAND = L"";
 
 std::vector<MainWidget*> windows;
 
@@ -398,6 +403,7 @@ MainWidget* get_window_with_opened_file_path(const std::wstring& file_path) {
 	if (file_path.size() > 0){
 		for (auto window : windows) {
 			//if (window->doc() && window->doc()->get_path() == file_path) {
+
 			if (window->doc() && std::filesystem::equivalent(window->doc()->get_path(), file_path)) {
 				return window;
 			}
@@ -550,6 +556,11 @@ MainWidget* handle_args(const QStringList& arguments) {
 	return target_window;
 }
 
+void focus_on_widget(QWidget* widget) {
+	widget->activateWindow();
+	widget->setWindowState(widget->windowState() & ~Qt::WindowMinimized | Qt::WindowActive);
+}
+
 int main(int argc, char* args[]) {
 
 	QSurfaceFormat format;
@@ -677,10 +688,12 @@ int main(int argc, char* args[]) {
 				MainWidget* target = handle_args(args);
 				if (!nofocus) {
 					if (target) {
-						target->activateWindow();
+						//target->activateWindow();
+						focus_on_widget(target);
 					}
 					else if (windows.size() > 0) {
-						windows[0]->activateWindow();
+						//windows[0]->activateWindow();
+						focus_on_widget(windows[0]);
 					}
 				}
 				});
