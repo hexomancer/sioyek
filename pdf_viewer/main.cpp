@@ -185,6 +185,8 @@ bool SHOW_DOC_PATH = false;
 float FASTREAD_OPACITY = 0.5f;
 bool SHOULD_WARN_ABOUT_USER_KEY_OVERRIDE = true;
 bool SINGLE_CLICK_SELECTS_WORDS = false;
+bool USE_LEGACY_KEYBINDS = true;
+bool MULTILINE_MENUS = false;
 
 float PAGE_SEPARATOR_WIDTH = 0.0f;
 float PAGE_SEPARATOR_COLOR[3] = {0.9f, 0.9f, 0.9f};
@@ -205,6 +207,8 @@ std::wstring SHIFT_CLICK_COMMAND = L"overview_under_cursor";
 std::wstring CONTROL_CLICK_COMMAND = L"smart_jump_under_cursor";
 std::wstring SHIFT_RIGHT_CLICK_COMMAND = L"";
 std::wstring CONTROL_RIGHT_CLICK_COMMAND = L"";
+std::wstring ALT_CLICK_COMMAND = L"";
+std::wstring ALT_RIGHT_CLICK_COMMAND = L"";
 
 std::vector<MainWidget*> windows;
 

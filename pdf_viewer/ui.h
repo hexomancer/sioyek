@@ -43,6 +43,7 @@ extern std::wstring UI_FONT_FACE_NAME;
 extern int FONT_SIZE;
 const int max_select_size = 100;
 extern bool SMALL_TOC;
+extern bool MULTILINE_MENUS;
 
 class HierarchialSortFilterProxyModel : public QSortFilterProxyModel {
 protected:
@@ -155,6 +156,10 @@ public:
 		return {};
 	}
 
+	virtual std::wstring get_selected_text() {
+		return L"";
+	}
+
 	bool eventFilter(QObject* obj, QEvent* event) override {
 		if (obj == line_edit) {
 			if (event->type() == QEvent::KeyPress) {
@@ -199,6 +204,13 @@ public:
 				if (key_event->key() == Qt::Key_Backtab) {
 					QKeyEvent* new_key_event = new QKeyEvent(key_event->type(), Qt::Key_Up, key_event->modifiers());
 					QCoreApplication::postEvent(get_view(), new_key_event);
+					return true;
+				}
+				if (((key_event->key() == Qt::Key_C) && is_control_pressed)) {
+					std::wstring text = get_selected_text();
+					if (text.size() > 0) {
+						copy_to_clipboard(text);
+					}
 					return true;
 				}
 				if (key_event->key() == Qt::Key_Return || key_event->key() == Qt::Key_Enter) {
@@ -305,6 +317,7 @@ private:
 
 	QStringListModel* string_list_model = nullptr;
 	std::vector<T> values;
+	std::vector<std::wstring> item_strings;
 	std::function<void(T*)> on_done = nullptr;
 	std::function<void(T*)> on_delete_function = nullptr;
 
@@ -328,6 +341,7 @@ public:
 		on_done(on_done),
 		on_delete_function(on_delete_function)
 	{
+		item_strings = std_string_list;
 		QVector<QString> q_string_list;
 		for (const auto& s : std_string_list) {
 			q_string_list.push_back(QString::fromStdWString(s));
@@ -363,8 +377,24 @@ public:
 
 		table_view->horizontalHeader()->hide();
 		table_view->verticalHeader()->hide();
+
+		if (MULTILINE_MENUS) {
+			table_view->setWordWrap(true);
+			table_view->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+		}
 	}
 
+	virtual std::wstring get_selected_text(){
+		auto index = this->get_selected_index();
+
+		if (index) {
+
+			auto source_index = this->proxy_model->mapToSource(index.value());
+			return item_strings[source_index.row()];
+		}
+
+		return L"";
+	}
 
 	virtual void on_delete(const QModelIndex& source_index, const QModelIndex& selected_index) override {
 		if (on_delete_function) {

@@ -11,7 +11,7 @@ Sioyek is a PDF viewer designed for reading research papers and technical books.
 
 ## Install
 ### Official packages
-There're installers for Windows, macOS and Linux. See [Releases page](https://github.com/ahrm/sioyek/releases).
+There are installers for Windows, macOS and Linux. See [Releases page](https://github.com/ahrm/sioyek/releases).
 
 ### Third-party packages for Linux
 If you prefer to install sioyek with a package manager, you can look at this list. Please note that they are provided by third party packagers. USE AT YOUR OWN RISK! If you're reporting a bug for a third-party package, please mention which package you're using.
@@ -20,6 +20,7 @@ Distro | Link | Maintainer
 ------- | ----- | -------------
 Flathub | [sioyek](https://flathub.org/apps/details/com.github.ahrm.sioyek) | [@nbenitez](https://flathub.org/apps/details/com.github.ahrm.sioyek)
 Arch | [AUR Sioyek-git](https://aur.archlinux.org/packages/sioyek-git/) | [@randomn4me](https://github.com/randomn4me)
+Arch | [AUR sioyek-appimage](https://aur.archlinux.org/packages/sioyek-appimage/) | [@DhruvaSambrani](https://github.com/DhruvaSambrani)
 Fedora | [Copr endle/sioyek](https://copr.fedorainfracloud.org/coprs/endle/sioyek/) | [@Endle](https://github.com/Endle)
 NixOS | [sioyek](https://search.nixos.org/packages?channel=unstable&show=sioyek&from=0&size=50&sort=relevance&type=packages&query=sioyek) | [@podocarp](https://github.com/podocarp)
 
@@ -47,7 +48,7 @@ You can search and jump to table of contents entries.
 
 https://user-images.githubusercontent.com/6392321/125321419-e5ab5880-e351-11eb-9688-95374a22774f.mp4
 
-You can jump to any referenced figure or bibliography item *even if the PDF file doesn't provide links*. You can also search the names of bibliography items in google scholar/libgen by middle clicking/shif+middle clicking on their name.
+You can jump to any referenced figure or bibliography item *even if the PDF file doesn't provide links*. You can also search the names of bibliography items in google scholar/libgen by middle clicking/shift+middle clicking on their name.
 
 ### Overview
 
@@ -73,7 +74,7 @@ Bookmarks are similar to marks except they are named by a text string and they a
 https://user-images.githubusercontent.com/6392321/130956728-7e0a87fa-4ada-4108-a8fc-9d9d04180f56.mp4
 
 
-Highlight text using different kinds of highlight, you can search among all the highlights.
+Highlight text using different kinds of highlights. You can search among all the highlights.
 
 ### Portals (this feature is most useful for users with multiple monitors)
 
