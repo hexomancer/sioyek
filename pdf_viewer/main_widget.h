@@ -55,6 +55,8 @@ private:
 	std::vector<DocumentViewState> history;
 	int current_history_index = -1;
 
+	std::wstring custom_status_message = L"";
+
 	bool* should_quit = nullptr;
 	// last position when mouse was clicked in absolute document space
 	AbsoluteDocumentPos last_mouse_down;
@@ -277,5 +279,7 @@ public:
 	bool execute_predefined_command(char symbol);
 	int get_current_monitor_width(); int get_current_monitor_height();
 	void synctex_under_pos(WindowPos position);
+	std::optional<std::wstring> get_paper_name_under_cursor();
+	void set_status_message(std::wstring new_status_string);
 
 };

@@ -350,8 +350,17 @@ MainWidget::MainWidget(fz_context* mupdf_context,
     text_command_line_edit_container->hide();
 
     on_command_done = [&](std::string command_name) {
-        const Command* command = command_manager.get_command_with_name(command_name);
-        handle_command_types(command, 1);
+        bool is_numeric = false;
+        int page_number = QString::fromStdString(command_name).toInt(&is_numeric);
+        if (is_numeric) {
+            if (main_document_view) {
+                main_document_view->goto_page(page_number - 1);
+            }
+        }
+        else {
+			const Command* command = command_manager.get_command_with_name(command_name);
+			handle_command_types(command, 1);
+        }
     };
 
     // when pdf renderer's background threads finish rendering a page or find a new search result
@@ -500,6 +509,10 @@ std::wstring MainWidget::get_status_string() {
         ss << " [ locked horizontal scroll ] ";
     }
     ss << " [ h:" << select_highlight_type << " ] ";
+
+    if (custom_status_message.size() > 0) {
+        ss << "[ " << custom_status_message << " ] ";
+    }
 
   //  if (last_command != nullptr) {
 		//ss << " [ " << last_command->name.c_str() << " ] ";
@@ -1833,6 +1846,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
     else if (command->name == "fit_to_page_height_smart") {
         main_document_view->fit_to_page_height(true);
     }
+    else if (command->name == "clear_status_string") {
+        set_status_message(L"");
+    }
 
     else if (command->name == "next_state") {
         next_state();
@@ -2457,6 +2473,23 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
     validate_render();
 }
 
+
+std::optional<std::wstring> MainWidget::get_paper_name_under_cursor() {
+	QPoint mouse_pos = mapFromGlobal(QCursor::pos());
+    WindowPos window_pos = { mouse_pos.x(), mouse_pos.y() };
+    auto normal_pos = main_document_view->window_to_normalized_window_pos(window_pos);
+
+    if (opengl_widget->is_window_point_in_overview(normal_pos)) {
+        auto [doc_page, doc_x, doc_y] = opengl_widget->window_pos_to_overview_pos(normal_pos);
+        return main_document_view->get_document()->get_paper_name_at_position(doc_page, doc_x, doc_y);
+    }
+    else {
+        DocumentPos doc_pos = main_document_view->window_to_document_pos(window_pos);
+        return main_document_view->get_document()->
+            get_paper_name_at_position(doc_pos.page, doc_pos.x, doc_pos.y);
+    }
+}
+
 void MainWidget::smart_jump_under_pos(WindowPos pos){
     if (!main_document_view_has_document()) {
         return;
@@ -2652,6 +2685,9 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
     if (current_pending_command->name == "execute") {
 
         execute_command(text);
+    }
+    if (current_pending_command->name == "set_status_string") {
+        set_status_message(text);
     }
     if (current_pending_command->name == "execute_predefined_command") {
         if (command_to_be_executed_symbol.has_value()) {
@@ -2926,6 +2962,14 @@ void MainWidget::execute_command(std::wstring command, std::wstring text) {
             //command_parts[i].replace("%{mouse_pos_window}", QString("%1 %2").arg(mouse_pos.x, mouse_pos.y));
             command_parts[i].replace("%{mouse_pos_document}", QString::number(mouse_pos_document.page) + " " + QString::number(mouse_pos_document.x) + " " + QString::number(mouse_pos_document.y));
             //command_parts[i].replace("%{mouse_pos_document}", QString("%1 %2 %3").arg(mouse_pos_document.page, mouse_pos_document.x, mouse_pos_document.y));
+            if (command_parts[i].indexOf("%{paper_name}") != -1) {
+                std::optional<std::wstring> maybe_paper_name = get_paper_name_under_cursor();
+                if (maybe_paper_name) {
+                    command_parts[i].replace("%{paper_name}", QString::fromStdWString(maybe_paper_name.value()));
+                }
+            }
+
+            command_parts[i].replace("%{sioyek_path}", QCoreApplication::applicationFilePath());
 
             std::wstring selected_line_text;
             if (main_document_view) {
@@ -3567,4 +3611,8 @@ void MainWidget::synctex_under_pos(WindowPos position) {
 	}
 	synctex_scanner_free(scanner);
 
+}
+
+void MainWidget::set_status_message(std::wstring new_status_string) {
+    custom_status_message = new_status_string;
 }
