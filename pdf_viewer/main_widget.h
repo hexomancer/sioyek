@@ -129,6 +129,7 @@ protected:
 	void focusInEvent(QFocusEvent* ev);
 
 	void toggle_statusbar();
+	void toggle_titlebar();
 	void handle_paper_name_on_pointer(std::wstring paper_name, bool is_shift_pressed);
 	//void paintEvent(QPaintEvent* paint_event) override;
 	void resizeEvent(QResizeEvent* resize_event) override;
@@ -282,5 +283,6 @@ public:
 	std::optional<std::wstring> get_paper_name_under_cursor();
 	void set_status_message(std::wstring new_status_string);
 	void remove_self_from_windows();
+	void handle_additional_command(std::wstring command_name);
 
 };

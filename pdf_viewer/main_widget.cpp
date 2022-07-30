@@ -100,6 +100,7 @@ extern std::wstring ALT_CLICK_COMMAND;
 extern std::wstring ALT_RIGHT_CLICK_COMMAND;
 extern Path local_database_file_path;
 extern Path global_database_file_path;
+extern std::map<std::wstring, std::wstring> ADDITIONAL_COMMANDS;
 
 bool MainWidget::main_document_view_has_document()
 {
@@ -763,7 +764,9 @@ void MainWidget::do_synctex_forward_search(const Path& pdf_file_path, const Path
                 main_document_view->goto_offset_within_page({ target_page, main_document_view->get_offset_x(), first_rect.value().y0 });
             }
         }
-
+    }
+    else {
+        open_document(pdf_file_path);
     }
     synctex_scanner_free(scanner);
 }
@@ -1674,6 +1677,10 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         }
         return;
     }
+    if (command->name[0] == '_') {
+        //user-defined commands start with underscore
+        handle_additional_command(utf8_decode(command->name));
+    }
     if (command->name == "goto_begining") {
         if (num_repeats) {
             main_document_view->goto_page(num_repeats - 1 + main_document_view->get_page_offset());
@@ -2407,6 +2414,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
     else if (command->name == "toggle_statusbar") {
 		toggle_statusbar();
 	}
+    else if (command->name == "toggle_titlebar") {
+		toggle_titlebar();
+	}
     else if (command->name == "smart_jump_under_cursor") {
         QPoint mouse_pos = mapFromGlobal(QCursor::pos());
         smart_jump_under_pos({ mouse_pos.x(), mouse_pos.y() });
@@ -2671,6 +2681,9 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
         opengl_widget->search_text(search_term, search_range);
     }
 
+    if (current_pending_command->name.starts_with("_")) {
+        execute_command(ADDITIONAL_COMMANDS[utf8_decode(current_pending_command->name)], text);
+    }
     if (current_pending_command->name == "enter_password") {
         std::string password = utf8_encode(text);
         pdf_renderer->add_password(main_document_view->get_document()->get_path(), password);
@@ -3503,6 +3516,18 @@ void MainWidget::toggle_statusbar() {
     }
 }
 
+void MainWidget::toggle_titlebar() {
+
+    Qt::WindowFlags window_flags = windowFlags();
+    if (window_flags.testFlag(Qt::FramelessWindowHint)) {
+        setWindowFlag(Qt::FramelessWindowHint, false);
+    }
+    else {
+        setWindowFlag(Qt::FramelessWindowHint, true);
+    }
+    show();
+}
+
 bool MainWidget::execute_predefined_command(char symbol) {
 	if ((symbol >= 'a') && (symbol <= 'z')) {
 		if (EXECUTE_COMMANDS[symbol - 'a'].find(L"%5") == std::wstring::npos) {
@@ -3625,4 +3650,23 @@ void MainWidget::remove_self_from_windows() {
             break;
         }
     }
+}
+
+void MainWidget::handle_additional_command(std::wstring command_name) {
+
+	if (ADDITIONAL_COMMANDS.find(command_name) != ADDITIONAL_COMMANDS.end()) {
+		std::wstring command_to_execute = ADDITIONAL_COMMANDS[command_name];
+		if (command_to_execute.find(L"%5") != -1) {
+			if (!current_pending_command) {
+				current_pending_command = *command_manager.get_command_with_name(utf8_encode(command_name));
+			}
+			current_pending_command.value().requires_text = true;
+			current_pending_command.value().requires_symbol = false;
+
+			handle_command(&current_pending_command.value(), 0);
+		}
+		else {
+			execute_command(command_to_execute);
+		}
+	}
 }
