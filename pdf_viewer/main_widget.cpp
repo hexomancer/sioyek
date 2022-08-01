@@ -489,6 +489,11 @@ std::wstring MainWidget::get_status_string() {
         main_document_view->get_document()->get_is_indexing()) {
         ss << " | indexing ... ";
     }
+    if (opengl_widget && opengl_widget->get_overview_page()) {
+        if (index_into_candidates > 0 && smart_view_candidates.size() > 0) {
+            ss << " [ preview " << index_into_candidates + 1 << " / " << smart_view_candidates.size() << " ]";
+        }
+    }
     if (this->synctex_mode) {
         ss << " [ synctex ]";
     }
@@ -496,20 +501,20 @@ std::wstring MainWidget::get_status_string() {
         ss << " [ drag ]";
     }
     if (opengl_widget->is_presentation_mode()) {
-        ss << " [ presentation ] ";
+        ss << " [ presentation ]";
     }
 
     if (visual_scroll_mode) {
-        ss << " [ visual scroll ] ";
+        ss << " [ visual scroll ]";
     }
 
     if (horizontal_scroll_locked) {
-        ss << " [ locked horizontal scroll ] ";
+        ss << " [ locked horizontal scroll ]";
     }
-    ss << " [ h:" << select_highlight_type << " ] ";
+    ss << " [ h:" << select_highlight_type << " ]";
 
     if (custom_status_message.size() > 0) {
-        ss << "[ " << custom_status_message << " ] ";
+        ss << " [ " << custom_status_message << " ]";
     }
 
   //  if (last_command != nullptr) {
@@ -1783,7 +1788,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 
 
     if (command->name == "link" || command->name == "portal") {
-        handle_link();
+        handle_portal();
     }
     else if (command->name == "new_window") {
 
@@ -1923,9 +1928,11 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
     }
     else if (command->name == "overview_definition") {
 		if (!opengl_widget->get_overview_page()) {
-			std::optional<DocumentPos> defpos = main_document_view->find_line_definition();
-			if (defpos) {
-				set_overview_position(defpos.value().page, defpos.value().y);
+			std::vector<DocumentPos> defpos = main_document_view->find_line_definitions();
+			if (defpos.size() > 0) {
+				set_overview_position(defpos[0].page, defpos[0].y);
+                smart_view_candidates = defpos;
+                index_into_candidates = 0;
 			}
         }
         else {
@@ -1933,7 +1940,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         }
     }
     else if (command->name == "portal_to_definition") {
-		std::optional<DocumentPos> defpos = main_document_view->find_line_definition();
+		std::optional<DocumentPos> defpos = main_document_view->find_line_definitions()[0];
         if (defpos) {
             AbsoluteDocumentPos abspos;
             doc()->page_pos_to_absolute_pos(defpos.value().page, defpos.value().x, defpos.value().y, &abspos.x, &abspos.y);
@@ -2450,6 +2457,28 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         QPoint mouse_pos = mapFromGlobal(QCursor::pos());
         overview_under_pos({ mouse_pos.x(), mouse_pos.y() });
     }
+    else if (command->name == "goto_overview") {
+		std::optional<DocumentPos> maybe_overview_position = get_overview_position();
+        if (maybe_overview_position.has_value()) {
+            long_jump_to_destination(maybe_overview_position.value());
+			opengl_widget->set_overview_page({});
+        }
+    }
+    else if (command->name == "portal_to_overview") {
+		std::optional<DocumentPos> maybe_overview_position = get_overview_position();
+        if (maybe_overview_position.has_value()) {
+            AbsoluteDocumentPos abs_pos = doc()->document_to_absolute_pos(maybe_overview_position.value());
+            std::string document_checksum = main_document_view->get_document()->get_checksum();
+            Link new_portal;
+            new_portal.dst.document_checksum = document_checksum;
+            new_portal.dst.book_state.offset_x = abs_pos.x;
+            new_portal.dst.book_state.offset_y = abs_pos.y;
+            new_portal.dst.book_state.zoom_level = main_document_view->get_zoom_level();
+            new_portal.src_offset_y = main_document_view->get_offset_y();
+            //new_portal.dst.book_state.
+            add_portal(main_document_view->get_document()->get_path(), new_portal);
+        }
+    }
     else if (command->name == "close_overview") {
         opengl_widget->set_overview_page({});
     }
@@ -2651,32 +2680,18 @@ void MainWidget::toggle_synctex_mode(){
     }
 }
 
-void MainWidget::handle_link() {
+void MainWidget::handle_portal() {
     if (!main_document_view_has_document()) return;
 
     if (is_pending_link_source_filled()) {
         auto [source_path, pl] = pending_link.value();
         pl.dst = main_document_view->get_checksum_state();
+
+        if (source_path.has_value()) {
+			add_portal(source_path.value(), pl);
+        }
+
         pending_link = {};
-
-        if (source_path == main_document_view->get_document()->get_path()) {
-            main_document_view->get_document()->add_link(pl);
-        }
-        else {
-            const std::unordered_map<std::wstring, Document*> cached_documents = document_manager->get_cached_documents();
-            for (auto [doc_path, doc] : cached_documents) {
-                if (source_path == doc_path) {
-                    doc->add_link(pl, false);
-                }
-            }
-
-            db_manager->insert_link(checksummer->get_checksum(source_path.value()),
-                pl.dst.document_checksum,
-                pl.dst.book_state.offset_x,
-                pl.dst.book_state.offset_y,
-                pl.dst.book_state.zoom_level,
-                pl.src_offset_y);
-        }
     }
     else {
         pending_link = std::make_pair<std::wstring, Link>(main_document_view->get_document()->get_path(),
@@ -3698,5 +3713,36 @@ void MainWidget::handle_additional_command(std::wstring command_name) {
 		else {
 			execute_command(command_to_execute);
 		}
+	}
+}
+
+std::optional<DocumentPos> MainWidget::get_overview_position() {
+    auto overview_state_ = opengl_widget->get_overview_page();
+    if (overview_state_.has_value()){
+        OverviewState overview_state = overview_state_.value();
+        DocumentPos pos = { overview_state.page, 0.0f, overview_state.offset_y };
+        return pos;
+    }
+    return {};
+}
+
+void MainWidget::add_portal(std::wstring source_path, Link new_link) {
+	if (source_path == main_document_view->get_document()->get_path()) {
+		main_document_view->get_document()->add_link(new_link);
+	}
+	else {
+		const std::unordered_map<std::wstring, Document*> cached_documents = document_manager->get_cached_documents();
+		for (auto [doc_path, doc] : cached_documents) {
+			if (source_path == doc_path) {
+				doc->add_link(new_link, false);
+			}
+		}
+
+		db_manager->insert_link(checksummer->get_checksum(source_path),
+			new_link.dst.document_checksum,
+			new_link.dst.book_state.offset_x,
+			new_link.dst.book_state.offset_y,
+			new_link.dst.book_state.zoom_level,
+			new_link.src_offset_y);
 	}
 }

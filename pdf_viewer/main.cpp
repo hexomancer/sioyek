@@ -190,6 +190,7 @@ bool USE_LEGACY_KEYBINDS = true;
 bool MULTILINE_MENUS = false;
 bool START_WITH_HELPER_WINDOW = false;
 std::map<std::wstring, std::wstring> ADDITIONAL_COMMANDS;
+bool PRERENDER_NEXT_PAGE = false;
 
 float PAGE_SEPARATOR_WIDTH = 0.0f;
 float PAGE_SEPARATOR_COLOR[3] = {0.9f, 0.9f, 0.9f};
@@ -411,7 +412,7 @@ MainWidget* get_window_with_opened_file_path(const std::wstring& file_path) {
 		for (auto window : windows) {
 			//if (window->doc() && window->doc()->get_path() == file_path) {
 
-			if (window->doc() && std::filesystem::equivalent(window->doc()->get_path(), file_path)) {
+			if (window->doc() && std::filesystem::equivalent(utf8_encode(window->doc()->get_path()), utf8_encode(file_path))) {
 				return window;
 			}
 		}
