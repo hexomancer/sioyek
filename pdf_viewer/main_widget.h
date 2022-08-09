@@ -71,6 +71,7 @@ private:
 
 	// when set, mouse wheel moves the visual mark
 	bool visual_scroll_mode = false;
+	bool debug_mode = false;
 
 	bool horizontal_scroll_locked = false;
 
@@ -152,7 +153,6 @@ protected:
 	void handle_escape();
 	void keyPressEvent(QKeyEvent* kevent) override;
 	void keyReleaseEvent(QKeyEvent* kevent) override;
-	void handle_command_with_file_name(const Command* command, std::wstring file_name);
 	bool is_waiting_for_symbol();
 	void key_event(bool released, QKeyEvent* kevent);
 	void handle_left_click(WindowPos click_pos, bool down, bool is_shift_pressed, bool is_control_pressed, bool is_alt_pressed);
@@ -184,7 +184,7 @@ protected:
 	void long_jump_to_destination(DocumentPos pos);
 	void long_jump_to_destination(int page, float offset_y);
 	void long_jump_to_destination(float abs_offset_y);
-	void execute_command(std::wstring command, std::wstring text=L"");
+	void execute_command(std::wstring command, std::wstring text=L"", bool wait=false);
 	QString get_status_stylesheet();
 	int get_status_bar_height();
     void smart_jump_under_pos(WindowPos pos);
@@ -229,6 +229,7 @@ public:
 	bool handle_command_with_symbol(const Command* command, char symbol);
 	void handle_pending_text_command(std::wstring text);
 	void handle_command_with_text(const Command* command, std::wstring text);
+	void handle_command_with_file_name(const Command* command, std::wstring file_name);
 
 	void invalidate_render();
 	void invalidate_ui();
@@ -287,7 +288,9 @@ public:
 	std::optional<std::wstring> get_paper_name_under_cursor();
 	void set_status_message(std::wstring new_status_string);
 	void remove_self_from_windows();
-	void handle_additional_command(std::wstring command_name);
+	void handle_additional_command(std::wstring command_name, bool wait=false);
 	std::optional<DocumentPos> get_overview_position();
+	void handle_keyboard_select(const std::wstring& text);
+	void run_multiple_commands(const std::wstring& commands);
 
 };

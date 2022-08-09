@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <optional>
 #include <memory>
+#include <cctype>
 
 
 #include <qscrollarea.h>
@@ -162,6 +163,12 @@ void MainWidget::mouseMoveEvent(QMouseEvent* mouse_event) {
     //int x = mouse_event->pos().x();
     //int y = mouse_event->pos().y();
     WindowPos mpos = { mouse_event->pos().x(), mouse_event->pos().y() };
+    if (debug_mode) {
+        DocumentPos doc_pos = main_document_view->window_to_document_pos(mpos);
+        std::wstring status_message = QString("%1,%2,%3").arg(QString::number(doc_pos.page), QString::number(doc_pos.x), QString::number(doc_pos.y)).toStdWString();
+        set_status_message(status_message);
+        invalidate_ui();
+    }
 
     std::optional<PdfLink> link = {};
 
@@ -320,7 +327,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
     // automatically open the helper window in second monitor
     int num_screens = QGuiApplication::screens().size();
 
-    if ((num_screens > 1) && (HELPER_WINDOW_SIZE[0] > 0)) {
+    if ((num_screens > 1) && (HELPER_WINDOW_SIZE[0] > 0) && (SHOULD_USE_MULTIPLE_MONITORS)) {
         apply_window_params_for_two_window_mode();
     }
     else {
@@ -628,8 +635,14 @@ void MainWidget::validate_render() {
     }
     validate_ui();
     update();
-    opengl_widget->update();
-    helper_opengl_widget->update();
+    if (opengl_widget != nullptr) {
+		opengl_widget->update();
+    }
+
+    if (helper_opengl_widget != nullptr) {
+		helper_opengl_widget->update();
+    }
+
     is_render_invalidated = false;
 }
 
@@ -1701,7 +1714,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
     }
 
     if (command->name == "goto_end") {
-        if (num_repeats) {
+        if (num_repeats > 1) {
             main_document_view->goto_page(num_repeats - 1 + main_document_view->get_page_offset());
         }
         else {
@@ -2434,7 +2447,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         opengl_widget->rotate_counterclockwise();
     }
     else if (command->name == "debug") {
-        status_label->show();
+		debug_mode = !debug_mode;
     }
     else if (command->name == "toggle_fastread") {
 		opengl_widget->toggle_fastread_mode();
@@ -2463,6 +2476,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
             long_jump_to_destination(maybe_overview_position.value());
 			opengl_widget->set_overview_page({});
         }
+    }
+    else if (command->name == "goto_selected_text") {
+		long_jump_to_destination(selection_begin.y);
     }
     else if (command->name == "portal_to_overview") {
 		std::optional<DocumentPos> maybe_overview_position = get_overview_position();
@@ -2577,14 +2593,19 @@ void MainWidget::smart_jump_under_pos(WindowPos pos){
     int target_page;
     float target_y_offset;
     if (find_location_of_text_under_pointer(pos, &target_page, &target_y_offset)) {
-        long_jump_to_destination(page, target_y_offset);
+        long_jump_to_destination(target_page, target_y_offset);
+    }
+    else {
+		std::optional<std::wstring> paper_name_on_pointer = main_document_view->get_document()->get_paper_name_at_position(flat_chars, offset_x, offset_y);
+		if (paper_name_on_pointer) {
+			handle_paper_name_on_pointer(paper_name_on_pointer.value(), is_shift_pressed);
+		}
     }
 
     //std::optional<std::pair<std::wstring, std::wstring>> generic_pair =\
     //        main_document_view->get_document()->get_generic_link_name_at_position(flat_chars, offset_x, offset_y);
 
     //std::optional<std::wstring> text_on_pointer = main_document_view->get_document()->get_text_at_position(flat_chars, offset_x, offset_y);
-    std::optional<std::wstring> paper_name_on_pointer = main_document_view->get_document()->get_paper_name_at_position(flat_chars, offset_x, offset_y);
     //std::optional<std::wstring> reference_text_on_pointer = main_document_view->get_document()->get_reference_text_at_position(flat_chars, offset_x, offset_y);
     //std::optional<std::wstring> equation_text_on_pointer = main_document_view->get_document()->get_equation_text_at_position(flat_chars, offset_x, offset_y);
 
@@ -2621,9 +2642,6 @@ void MainWidget::smart_jump_under_pos(WindowPos pos){
     //    }
 
     //}
-    if (paper_name_on_pointer) {
-        handle_paper_name_on_pointer(paper_name_on_pointer.value(), is_shift_pressed);
-    }
 }
 
 void MainWidget::visual_mark_under_pos(WindowPos pos){
@@ -2779,17 +2797,7 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
     }
     if (current_pending_command->name == "keyboard_select") {
 
-        QStringList parts = QString::fromStdWString(text).split(' ');
-
-        if (parts.size() == 2) {
-
-            fz_irect srect = get_tag_window_rect(parts.at(0).toStdString());
-            fz_irect erect = get_tag_window_rect(parts.at(1).toStdString());
-
-            handle_left_click({ srect.x0 + 5, (srect.y0 + srect.y1) / 2 }, true, false, false, false);
-            handle_left_click({ erect.x0 - 5 , (erect.y0 + erect.y1) / 2 }, false, false, false, false);
-            opengl_widget->set_should_highlight_words(false);
-		}
+        handle_keyboard_select(text);
 	}
     if (current_pending_command->name == "keyboard_smart_jump") {
 		fz_irect rect = get_tag_window_rect(utf8_encode(text));
@@ -2976,7 +2984,7 @@ void MainWidget::toggle_dark_mode() {
     this->opengl_widget->toggle_dark_mode();
 }
 
-void MainWidget::execute_command(std::wstring command, std::wstring text) {
+void MainWidget::execute_command(std::wstring command, std::wstring text, bool wait) {
 
     std::wstring file_path = main_document_view->get_document()->get_path();
     QString qfile_path = QString::fromStdWString(file_path);
@@ -2996,23 +3004,26 @@ void MainWidget::execute_command(std::wstring command, std::wstring text) {
 
         command_parts.takeFirst();
 
-        // you would think
-        // "command %2".arg("first", "second");
-        // would expand into
-        // "command second"
-        // and you would be wrong, for some reason qt decided the lowest numbered
-        // %n should be filled with the first argument and so on. what follows is a hack to get around this
-
 		QPoint mouse_pos_ = mapFromGlobal(QCursor::pos());
         WindowPos mouse_pos = { mouse_pos_.x(), mouse_pos_.y() };
         DocumentPos mouse_pos_document = main_document_view->window_to_document_pos(mouse_pos);
 
         for (int i = 0; i < command_parts.size(); i++) {
+            // lagacy number macros, now replaced with names ones
             command_parts[i].replace("%1", qfile_path);
             command_parts[i].replace("%2", qfile_name);
             command_parts[i].replace("%3", QString::fromStdWString(selected_text));
             command_parts[i].replace("%4", QString::number(get_current_page_number()));
             command_parts[i].replace("%5", QString::fromStdWString(text));
+
+            // new named macros
+            command_parts[i].replace("%{file_path}", qfile_path);
+            command_parts[i].replace("%{file_name}", qfile_name);
+            command_parts[i].replace("%{selected_text}", QString::fromStdWString(selected_text));
+            command_parts[i].replace("%{page_number}", QString::number(get_current_page_number()));
+            command_parts[i].replace("%{command_text}", QString::fromStdWString(text));
+
+
             command_parts[i].replace("%{mouse_pos_window}", QString::number(mouse_pos.x) + " " + QString::number(mouse_pos.y));
             //command_parts[i].replace("%{mouse_pos_window}", QString("%1 %2").arg(mouse_pos.x, mouse_pos.y));
             command_parts[i].replace("%{mouse_pos_document}", QString::number(mouse_pos_document.page) + " " + QString::number(mouse_pos_document.x) + " " + QString::number(mouse_pos_document.y));
@@ -3036,21 +3047,14 @@ void MainWidget::execute_command(std::wstring command, std::wstring text) {
 
             if (selected_line_text.size() > 0) {
 				command_parts[i].replace("%6", QString::fromStdWString(selected_line_text));
+				command_parts[i].replace("%{line_text}", QString::fromStdWString(selected_line_text));
 			}
 
             std::wstring command_parts_ = command_parts[i].toStdWString();
             command_args.push_back(command_parts[i]);
-
-            //bool part_requires_only_second = (command_parts[i].arg("%1", "%2") != command_parts[i]);
-            //if (part_requires_only_second) {
-            //    command_args.push_back(command_parts.at(i).arg(qfile_name));
-            //}
-            //else {
-            //    command_args.push_back(command_parts.at(i).arg(qfile_path, qfile_name));
-            //}
         }
 
-        run_command(command_name.toStdWString(), command_args, false);
+        run_command(command_name.toStdWString(), command_args, wait);
     }
 
 }
@@ -3072,8 +3076,8 @@ void MainWidget::handle_paper_name_on_pointer(std::wstring paper_name, bool is_s
 void MainWidget::move_vertical(float amount) {
     move_document(0, amount);
     validate_render();
-
 }
+
 void MainWidget::move_horizontal(float amount){
     if (!horizontal_scroll_locked) {
         move_document(amount, 0);
@@ -3575,7 +3579,7 @@ void MainWidget::toggle_titlebar() {
 
 bool MainWidget::execute_predefined_command(char symbol) {
 	if ((symbol >= 'a') && (symbol <= 'z')) {
-		if (EXECUTE_COMMANDS[symbol - 'a'].find(L"%5") == std::wstring::npos) {
+		if (!command_requires_text(EXECUTE_COMMANDS[symbol - 'a'])) {
 			execute_command(EXECUTE_COMMANDS[symbol - 'a']);
             return true;
 		}
@@ -3697,11 +3701,11 @@ void MainWidget::remove_self_from_windows() {
     }
 }
 
-void MainWidget::handle_additional_command(std::wstring command_name) {
+void MainWidget::handle_additional_command(std::wstring command_name, bool wait) {
 
 	if (ADDITIONAL_COMMANDS.find(command_name) != ADDITIONAL_COMMANDS.end()) {
 		std::wstring command_to_execute = ADDITIONAL_COMMANDS[command_name];
-		if (command_to_execute.find(L"%5") != -1) {
+		if (command_requires_text(command_to_execute)) {
 			if (!current_pending_command) {
 				current_pending_command = *command_manager.get_command_with_name(utf8_encode(command_name));
 			}
@@ -3711,7 +3715,7 @@ void MainWidget::handle_additional_command(std::wstring command_name) {
 			handle_command(&current_pending_command.value(), 0);
 		}
 		else {
-			execute_command(command_to_execute);
+			execute_command(command_to_execute, L"", wait);
 		}
 	}
 }
@@ -3745,4 +3749,60 @@ void MainWidget::add_portal(std::wstring source_path, Link new_link) {
 			new_link.dst.book_state.zoom_level,
 			new_link.src_offset_y);
 	}
+}
+
+void MainWidget::handle_keyboard_select(const std::wstring& text) {
+	if (std::isdigit(text[0])) {
+        // we can select text 
+		QStringList parts = QString::fromStdWString(text).split(' ');
+        if (parts.size() == 2) {
+            QString begin_text = parts.at(0);
+            QString end_text = parts.at(1);
+            QStringList begin_parts = begin_text.split(',');
+            QStringList end_parts = end_text.split(',');
+            if ((begin_parts.size() == 3) && (end_parts.size() == 3)) {
+
+                int begin_page_number = begin_parts.at(0).toInt();
+                float begin_offset_x = begin_parts.at(1).toFloat();
+                float begin_offset_y = begin_parts.at(2).toFloat();
+
+                int end_page_number = end_parts.at(0).toInt();
+                float end_offset_x = end_parts.at(1).toFloat();
+                float end_offset_y = end_parts.at(2).toFloat();
+
+                DocumentPos begin_doc_pos = { begin_page_number, begin_offset_x, begin_offset_y };
+                DocumentPos end_doc_pos = { end_page_number, end_offset_x, end_offset_y };
+
+                WindowPos begin_window_pos = main_document_view->document_to_window_pos_in_pixels(begin_doc_pos);
+                WindowPos end_window_pos = main_document_view->document_to_window_pos_in_pixels(end_doc_pos);
+
+				handle_left_click(begin_window_pos, true, false, false, false);
+				handle_left_click(end_window_pos, false, false, false, false);
+				opengl_widget->set_should_highlight_words(false);
+
+            }
+
+        }
+	}
+	else {
+
+		QStringList parts = QString::fromStdWString(text).split(' ');
+
+		if (parts.size() == 2) {
+
+			fz_irect srect = get_tag_window_rect(parts.at(0).toStdString());
+			fz_irect erect = get_tag_window_rect(parts.at(1).toStdString());
+
+			handle_left_click({ srect.x0 + 5, (srect.y0 + srect.y1) / 2 }, true, false, false, false);
+			handle_left_click({ erect.x0 - 5 , (erect.y0 + erect.y1) / 2 }, false, false, false, false);
+			opengl_widget->set_should_highlight_words(false);
+		}
+	}
+}
+
+void MainWidget::run_multiple_commands(const std::wstring& commands) {
+    QStringList command_list = QString::fromStdWString(commands).split(';');
+    for (auto command : command_list) {
+		handle_command(command_manager.get_command_with_name(command.toStdString()), 1);
+    }
 }
