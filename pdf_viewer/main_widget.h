@@ -158,8 +158,7 @@ protected:
 	void handle_left_click(WindowPos click_pos, bool down, bool is_shift_pressed, bool is_control_pressed, bool is_alt_pressed);
 	void handle_right_click(WindowPos click_pos, bool down, bool is_shift_pressed, bool is_control_pressed, bool is_alt_pressed);
 
-	void update_history_state();
-	void push_state();
+	void push_state(bool update=true);
 	void next_state();
 	void prev_state();
 	void update_current_history_index();
@@ -273,8 +272,8 @@ public:
 
 	std::vector<fz_rect> get_flat_words();
 
-	fz_rect get_tag_rect(std::string tag);
-	fz_irect get_tag_window_rect(std::string tag);
+	std::optional<fz_rect> get_tag_rect(std::string tag);
+	std::optional<fz_irect> get_tag_window_rect(std::string tag);
 
 	bool is_rotated();
 	void on_new_paper_added(const std::wstring& file_path);
