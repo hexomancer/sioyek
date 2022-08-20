@@ -61,7 +61,7 @@ CommandManager::CommandManager() {
 	commands.push_back({ "delete_highlight",			false,	false,	false,	false,	true,	{}});
 	commands.push_back({ "goto_link",					false,	false,	false,	true,	true,	{}});
 	commands.push_back({ "goto_portal",					false,	false,	false,	true,	true,	{}});
-	commands.push_back({ "edit_link",					false,	false,	false,	false,	true,	{}});
+	commands.push_back({ "edit_link",					false,	false,	false,	true,	true,	{}});
 	commands.push_back({ "edit_portal",					false,	false,	false,	true,	true,	{}});
 	commands.push_back({ "open_prev_doc",				false,	false,	false,	true,	false,	{}});
 	commands.push_back({ "open_document_embedded",		false,	false,	false,	true,	false,	{}});
@@ -153,6 +153,7 @@ CommandManager::CommandManager() {
 	commands.push_back({ "portal_to_overview",			false,	false,	false,	false,	true,	{}});
 	commands.push_back({ "goto_selected_text",			false,	false,	false,	false,	true,	{}});
 	commands.push_back({ "focus_text",					true,	false,	false,	false,	true,	{}});
+	commands.push_back({ "goto_window",					false,	false,	false,	false,	false,	{}});
 
 	for (auto [command_name, _] : ADDITIONAL_COMMANDS) {
 		commands.push_back({ utf8_encode(command_name) , false, false, false, false, true});
