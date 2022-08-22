@@ -102,6 +102,8 @@ extern std::wstring ALT_RIGHT_CLICK_COMMAND;
 extern Path local_database_file_path;
 extern Path global_database_file_path;
 extern std::map<std::wstring, std::wstring> ADDITIONAL_COMMANDS;
+extern bool HIGHLIGHT_MIDDLE_CLICK;
+extern std::wstring STARTUP_COMMANDS;
 
 bool MainWidget::main_document_view_has_document()
 {
@@ -1479,7 +1481,14 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
     }
 
     if (mevent->button() == Qt::MouseButton::MiddleButton) {
-        smart_jump_under_pos({ mevent->pos().x(), mevent->pos().y() });
+        if (HIGHLIGHT_MIDDLE_CLICK
+            && opengl_widget->selected_character_rects.size() > 0
+            && !(opengl_widget && opengl_widget->get_overview_page())) {
+          handle_command(command_manager.get_command_with_name("add_highlight_with_current_type"), 1);
+        }
+        else {
+          smart_jump_under_pos({ mevent->pos().x(), mevent->pos().y() });
+        }
     }
 
 }
@@ -1831,6 +1840,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
             should_quit);
         new_widget->open_document(main_document_view->get_state());
         new_widget->show();
+        new_widget->run_multiple_commands(STARTUP_COMMANDS);
         windows.push_back(new_widget);
     }
 

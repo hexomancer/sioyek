@@ -83,7 +83,7 @@ std::string LOG_FILE_NAME = "sioyek_log.txt";
 std::ofstream LOG_FILE;
 int FONT_SIZE = -1;
 int STATUS_BAR_FONT_SIZE = -1;
-std::string APPLICATION_VERSION = "1.4.0";
+std::string APPLICATION_VERSION = "1.5.0";
 float BACKGROUND_COLOR[3] = { 1.0f, 1.0f, 1.0f };
 float DARK_MODE_BACKGROUND_COLOR[3] = { 0.0f, 0.0f, 0.0f };
 float CUSTOM_BACKGROUND_COLOR[3] = { 1.0f, 1.0f, 1.0f };
@@ -192,6 +192,7 @@ bool START_WITH_HELPER_WINDOW = false;
 std::map<std::wstring, std::wstring> ADDITIONAL_COMMANDS;
 bool PRERENDER_NEXT_PAGE = false;
 bool EMACS_MODE = false;
+bool HIGHLIGHT_MIDDLE_CLICK = false;
 
 float PAGE_SEPARATOR_WIDTH = 0.0f;
 float PAGE_SEPARATOR_COLOR[3] = {0.9f, 0.9f, 0.9f};
@@ -520,6 +521,7 @@ MainWidget* handle_args(const QStringList& arguments) {
 
 	if ((pdf_file_name.size() > 0) && (parser->isSet("new-window") || SHOULD_LAUNCH_NEW_WINDOW) && (!parser->isSet("reuse-window")) && (target_window == nullptr) && (windows[0]->doc() != nullptr)) {
 		target_window = new MainWidget(windows[0]);
+		target_window->run_multiple_commands(STARTUP_COMMANDS);
 		target_window->apply_window_params_for_one_window_mode(true);
 		target_window->show();
 		windows.push_back(target_window);
