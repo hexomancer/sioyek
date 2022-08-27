@@ -546,11 +546,17 @@ void PdfViewOpenGLWidget::render_overview(OverviewState overview) {
 		glBindBuffer(GL_ARRAY_BUFFER, shared_gl_objects.uv_buffer_object);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(page_uvs), page_uvs, GL_DYNAMIC_DRAW);
 
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		if (!RERENDER_OVERVIEW) {
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		}
+
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+		if (!RERENDER_OVERVIEW) {
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		}
 	}
 
 	//draw the border
@@ -570,11 +576,14 @@ void PdfViewOpenGLWidget::render_page(int page_number) {
 
 	if (!valid_document()) return;
 
+	int rendered_width = -1;
+	int rendered_height = -1;
+
 	GLuint texture = pdf_renderer->find_rendered_page(document_view->get_document()->get_path(),
 		page_number,
 		document_view->get_zoom_level(),
-		nullptr,
-		nullptr);
+		&rendered_width,
+		&rendered_height);
 
 	float page_vertices[4 * 2];
 	fz_rect page_rect = { 0,
@@ -582,7 +591,7 @@ void PdfViewOpenGLWidget::render_page(int page_number) {
 		document_view->get_document()->get_page_width(page_number),
 		document_view->get_document()->get_page_height(page_number) };
 
-	fz_rect window_rect = document_view->document_to_window_rect(page_number, page_rect);
+	fz_rect window_rect = document_view->document_to_window_rect_pixel_perfect(page_number, page_rect, rendered_width, rendered_height);
 	rect_to_quad(window_rect, page_vertices);
 
 	if (texture != 0) {
