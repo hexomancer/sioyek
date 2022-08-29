@@ -72,6 +72,7 @@ CommandManager::CommandManager() {
 	commands.push_back({ "toggle_one_window",			false,	false,	false,	false,	false,	{}});
 	commands.push_back({ "toggle_highlight",			false,	false,	false,	false,	false,	{}});
 	commands.push_back({ "toggle_synctex",				false,	false,	false,	false,	false,	{}});
+	commands.push_back({ "toggle_show_last_command",	false,	false,	false,	false,	false,	{}});
 	//commands.push_back({ "command", true, false , false, false, {}});
 	commands.push_back({ "command",						false,	false,	false,	false,	false,	{}});
 	//commands.push_back({ "search_selected_text_in_google_scholar", false, false , false, false, {}});
@@ -365,7 +366,7 @@ InputParseTreeNode* parse_lines(
 			else if (((size_t)i == (tokens.size() - 1)) &&
 				(SHOULD_WARN_ABOUT_USER_KEY_OVERRIDE ||
 					(command_file_names[j].compare(parent_node->defining_file_path)) == 0)) {
-				if (parent_node->name[0].compare(command_names[j][0]) != 0) {
+				if ((parent_node->name.size() == 0) || parent_node->name[0].compare(command_names[j][0]) != 0) {
 
 					std::wcout << L"Warning: key defined in " << parent_node->defining_file_path
 						<< L":" << parent_node->defining_file_line
