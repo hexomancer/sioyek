@@ -166,3 +166,7 @@ bool has_arg(int argc, char** argv, std::string key);
 std::vector<std::wstring> find_all_regex_matches(const std::wstring& haystack, const std::wstring& regex_string);
 bool command_requires_text(std::wstring command);
 void hexademical_to_normalized_color(std::wstring color_string, float* color, int n_components);
+void parse_command_string(std::wstring command_string, std::string& command_name, std::wstring& command_data);
+void parse_color(std::wstring color_string, float* out_color, int n_components);
+int get_status_bar_height();
+void flat_char_prism(const std::vector<fz_stext_char*> chars, int page, std::wstring& output_text, std::vector<int>& pages, std::vector<fz_rect>& rects);

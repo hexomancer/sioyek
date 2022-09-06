@@ -88,9 +88,15 @@ extern bool USE_LEGACY_KEYBINDS;
 extern bool MULTILINE_MENUS;
 extern bool START_WITH_HELPER_WINDOW;
 extern std::map<std::wstring, std::wstring> ADDITIONAL_COMMANDS;
+extern std::map<std::wstring, std::wstring> ADDITIONAL_MACROS;
 extern bool PRERENDER_NEXT_PAGE;
 extern bool EMACS_MODE;
 extern bool HIGHLIGHT_MIDDLE_CLICK;
+extern float HYPERDRIVE_SPEED_FACTOR;
+extern float SMOOTH_SCROLL_SPEED;
+extern float SMOOTH_SCROLL_DRAG;
+extern bool IGNORE_STATUSBAR_IN_PRESENTATION_MODE;
+extern bool SUPER_FAST_SEARCH;
 
 template<typename T>
 void* generic_deserializer(std::wstringstream& stream, void* res_) {
@@ -374,6 +380,11 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 	configs.push_back({ L"prerender_next_page_presentation", &PRERENDER_NEXT_PAGE, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"emacs_mode_menus", &EMACS_MODE, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"highlight_middle_click", &HIGHLIGHT_MIDDLE_CLICK, bool_serializer, bool_deserializer, bool_validator });
+	configs.push_back({ L"hyperdrive_speed_factor", &HYPERDRIVE_SPEED_FACTOR, float_serializer, float_deserializer, nullptr });
+	configs.push_back({ L"smooth_scroll_speed", &SMOOTH_SCROLL_SPEED, float_serializer, float_deserializer, nullptr });
+	configs.push_back({ L"smooth_scroll_drag", &SMOOTH_SCROLL_DRAG, float_serializer, float_deserializer, nullptr });
+	configs.push_back({ L"ignore_statusbar_in_presentation_mode", &IGNORE_STATUSBAR_IN_PRESENTATION_MODE, bool_serializer, bool_deserializer, bool_validator });
+	configs.push_back({ L"super_fast_search", &SUPER_FAST_SEARCH, bool_serializer, bool_deserializer, bool_validator });
 
 	std::wstring highlight_config_string = L"highlight_color_a";
 	std::wstring search_url_config_string = L"search_url_a";
@@ -419,15 +430,20 @@ void ConfigManager::deserialize_file(const Path& file_path) {
 		std::wstring conf_name;
 		ss >> conf_name;
 		//special handling for new_command 
-		if (conf_name == L"new_command") {
+		if ((conf_name == L"new_command") || (conf_name == L"new_macro")) {
 			std::wstring config_value;
 			std::getline(ss, config_value);
 			config_value = strip_string(config_value);
 			int space_index = config_value.find(L" ");
 			std::wstring new_command_name = config_value.substr(0, space_index);
 			if (new_command_name[0] == '_') {
-				std::wstring new_command_shell_command = config_value.substr(space_index + 1, config_value.size() - space_index - 1);
-				ADDITIONAL_COMMANDS[new_command_name] = new_command_shell_command;
+				std::wstring command_value = config_value.substr(space_index + 1, config_value.size() - space_index - 1);
+				if (conf_name == L"new_command") {
+					ADDITIONAL_COMMANDS[new_command_name] = command_value;
+				}
+				if (conf_name == L"new_macro") {
+					ADDITIONAL_MACROS[new_command_name] = command_value;
+				}
 			}
 		}
 		else {
@@ -500,4 +516,19 @@ std::vector<Path> ConfigManager::get_all_user_config_files(){
 		}
 	}
 	return  res;
+}
+
+std::vector<Config> ConfigManager::get_configs() {
+	return configs;
+}
+
+void ConfigManager::deserialize_config(std::string config_name, std::wstring config_value) {
+
+	std::wstringstream config_value_stream(config_value);
+	Config* conf = get_mut_config_with_name(utf8_decode(config_name));
+	auto deserialization_result = conf->deserialize(config_value_stream, conf->value);
+	if (deserialization_result != nullptr) {
+		conf->value = deserialization_result;
+	}
+
 }

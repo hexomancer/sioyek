@@ -628,22 +628,25 @@ void PdfViewOpenGLWidget::render_page(int page_number) {
 	glBufferData(GL_ARRAY_BUFFER, sizeof(page_vertices), page_vertices, GL_DYNAMIC_DRAW);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-	// render page separator
-	glUseProgram(shared_gl_objects.separator_program);
+	if (!is_presentation_mode()) {
 
-	fz_rect separator_rect = { 0,
-		document_view->get_document()->get_page_height(page_number) - PAGE_SEPARATOR_WIDTH / 2,
-		document_view->get_document()->get_page_width(page_number),
-		document_view->get_document()->get_page_height(page_number) + PAGE_SEPARATOR_WIDTH / 2};
+		// render page separator
+		glUseProgram(shared_gl_objects.separator_program);
 
-	fz_rect separator_window_rect = document_view->document_to_window_rect(page_number, separator_rect);
-	rect_to_quad(separator_window_rect, page_vertices);
+		fz_rect separator_rect = { 0,
+			document_view->get_document()->get_page_height(page_number) - PAGE_SEPARATOR_WIDTH / 2,
+			document_view->get_document()->get_page_width(page_number),
+			document_view->get_document()->get_page_height(page_number) + PAGE_SEPARATOR_WIDTH / 2};
 
-	glUniform3fv(shared_gl_objects.separator_background_color_uniform_location, 1, PAGE_SEPARATOR_COLOR);
+		fz_rect separator_window_rect = document_view->document_to_window_rect(page_number, separator_rect);
+		rect_to_quad(separator_window_rect, page_vertices);
 
-	glBindBuffer(GL_ARRAY_BUFFER, shared_gl_objects.vertex_buffer_object);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(page_vertices), page_vertices, GL_DYNAMIC_DRAW);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		glUniform3fv(shared_gl_objects.separator_background_color_uniform_location, 1, PAGE_SEPARATOR_COLOR);
+
+		glBindBuffer(GL_ARRAY_BUFFER, shared_gl_objects.vertex_buffer_object);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(page_vertices), page_vertices, GL_DYNAMIC_DRAW);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	}
 
 }
 
@@ -686,7 +689,11 @@ void PdfViewOpenGLWidget::render(QPainter* painter) {
 
 	if (is_presentation_mode()) {
 		if (PRERENDER_NEXT_PAGE) {
-			render_page(visible_page_number.value() + 1);
+			GLuint texture = pdf_renderer->find_rendered_page(document_view->get_document()->get_path(),
+				visible_page_number.value() + 1,
+				document_view->get_zoom_level(),
+				nullptr,
+				nullptr);
 		}
 		render_page(visible_page_number.value());
 	}
@@ -901,7 +908,7 @@ bool PdfViewOpenGLWidget::get_is_searching(float* prog) {
 	return true;
 }
 
-void PdfViewOpenGLWidget::search_text(const std::wstring& text, std::optional<std::pair<int,int>> range) {
+void PdfViewOpenGLWidget::search_text(const std::wstring& text, bool regex, std::optional<std::pair<int,int>> range) {
 
 	if (!document_view) return;
 
@@ -910,21 +917,45 @@ void PdfViewOpenGLWidget::search_text(const std::wstring& text, std::optional<st
 	current_search_result_index = -1;
 	search_results_mutex.unlock();
 
-	is_searching = true;
-	is_search_cancelled = false;
+	int min_page = -1;
+	int max_page = 2147483647;
+	if (range.has_value()) {
+		min_page = range.value().first;
+		max_page = range.value().second;
+	}
 
-	int current_page = document_view->get_center_page_number();
-	if (current_page >= 0) {
-		pdf_renderer->add_request(
-			document_view->get_document()->get_path(),
-			current_page,
-			text,
-			&search_results,
-			&percent_done,
-			&is_searching,
-			&search_results_mutex,
-			range);
+	if (document_view->get_document()->is_super_fast_index_ready()) {
+		int current_page = document_view->get_center_page_number();
+		std::vector<SearchResult> results;
+		if (regex) {
+			results = document_view->get_document()->search_regex(text, current_page, min_page, max_page);
+		}
+		else {
+			results = document_view->get_document()->search_text(text, current_page, min_page, max_page);
+		}
+		search_results = std::move(results);
+		is_searching = false;
+		is_search_cancelled = false;
+		percent_done = 1.0f;
+	}
+	else {
 
+		is_searching = true;
+		is_search_cancelled = false;
+
+		int current_page = document_view->get_center_page_number();
+		if (current_page >= 0) {
+			pdf_renderer->add_request(
+				document_view->get_document()->get_path(),
+				current_page,
+				text,
+				&search_results,
+				&percent_done,
+				&is_searching,
+				&search_results_mutex,
+				range);
+
+		}
 	}
 }
 

@@ -102,8 +102,16 @@ extern std::wstring ALT_RIGHT_CLICK_COMMAND;
 extern Path local_database_file_path;
 extern Path global_database_file_path;
 extern std::map<std::wstring, std::wstring> ADDITIONAL_COMMANDS;
+extern std::map<std::wstring, std::wstring> ADDITIONAL_MACROS;
 extern bool HIGHLIGHT_MIDDLE_CLICK;
 extern std::wstring STARTUP_COMMANDS;
+extern float CUSTOM_BACKGROUND_COLOR[3];
+extern float CUSTOM_TEXT_COLOR[3];
+extern float HYPERDRIVE_SPEED_FACTOR;
+extern float SMOOTH_SCROLL_SPEED;
+extern float SMOOTH_SCROLL_DRAG;
+extern bool IGNORE_STATUSBAR_IN_PRESENTATION_MODE;
+extern bool SUPER_FAST_SEARCH;
 
 bool MainWidget::main_document_view_has_document()
 {
@@ -278,7 +286,7 @@ void MainWidget::closeEvent(QCloseEvent* close_event) {
     handle_close_event();
 }
 
-MainWidget::MainWidget(MainWidget* other) : MainWidget(other->mupdf_context, other->db_manager, other->document_manager, other->config_manager, other->input_handler, other->checksummer, other->should_quit) {
+MainWidget::MainWidget(MainWidget* other) : MainWidget(other->mupdf_context, other->db_manager, other->document_manager, other->config_manager, other->command_manager, other->input_handler, other->checksummer, other->should_quit) {
 
 }
 
@@ -286,6 +294,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
     DatabaseManager* db_manager,
     DocumentManager* document_manager,
     ConfigManager* config_manager,
+    CommandManager* command_manager,
     InputHandler* input_handler,
     CachedChecksummer* checksummer,
     bool* should_quit_ptr,
@@ -297,7 +306,8 @@ MainWidget::MainWidget(fz_context* mupdf_context,
     config_manager(config_manager),
     input_handler(input_handler),
     checksummer(checksummer),
-    should_quit(should_quit_ptr)
+    should_quit(should_quit_ptr),
+    command_manager(command_manager)
 {
     setMouseTracking(true);
     setAcceptDrops(true);
@@ -369,8 +379,8 @@ MainWidget::MainWidget(fz_context* mupdf_context,
             }
         }
         else {
-			const Command* command = command_manager.get_command_with_name(command_name);
-			handle_command_types(command, 1);
+			const Command* command = this->command_manager->get_command_with_name(command_name);
+			handle_command_types(command, 0);
         }
     };
 
@@ -382,10 +392,10 @@ MainWidget::MainWidget(fz_context* mupdf_context,
     // this is done so that thousands of search results only trigger
     // a few rerenders
     // todo: make interval time configurable
-    QTimer* timer = new QTimer(this);
+    validation_interval_timer = new QTimer(this);
     unsigned int INTERVAL_TIME = 200;
-    timer->setInterval(INTERVAL_TIME);
-    connect(timer, &QTimer::timeout, [&, INTERVAL_TIME]() {
+    validation_interval_timer->setInterval(INTERVAL_TIME);
+    connect(validation_interval_timer , &QTimer::timeout, [&, INTERVAL_TIME]() {
 
 
         if (is_render_invalidated) {
@@ -416,7 +426,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
             }
         }
         });
-    timer->start();
+    validation_interval_timer->start();
 
 
     QVBoxLayout* layout = new QVBoxLayout;
@@ -530,6 +540,17 @@ std::wstring MainWidget::get_status_string() {
 			ss << " [ last command: " << utf8_decode(last_command->name) << " ]";
         }
     }
+    if (is_hyperdrive_mode && main_document_view_has_document()) {
+        std::wstring location_string = L"[ -------------------- ]";
+        int page_number = main_document_view->get_center_page_number();
+        int num_pages = main_document_view->get_document()->num_pages();
+        int index = ((page_number+1) * 20 / num_pages) + 1;
+        if (index == location_string.size()) {
+            index--;
+        }
+        location_string[index] = '*';
+        ss << location_string;
+    }
 
   //  if (last_command != nullptr) {
 		//ss << " [ " << last_command->name.c_str() << " ] ";
@@ -572,7 +593,7 @@ void MainWidget::handle_escape() {
         main_document_view->handle_escape();
         opengl_widget->handle_escape();
     }
-    
+
     if (opengl_widget) {
 		bool done_anything = false;
         if (opengl_widget->get_overview_page()) {
@@ -607,6 +628,40 @@ void MainWidget::keyReleaseEvent(QKeyEvent* kevent) {
 }
 
 void MainWidget::validate_render() {
+    if (smooth_scroll_mode) {
+        if (main_document_view_has_document()) {
+            float secs = static_cast<float>(-QTime::currentTime().msecsTo(last_speed_update_time)) / 1000.0f;
+
+            if (secs > 0.1f) {
+                secs = 0.0f;
+            }
+
+            if (!opengl_widget->get_overview_page()) {
+				float current_offset = main_document_view->get_offset_y();
+				main_document_view->set_offset_y(current_offset + smooth_scroll_speed * secs);
+            }
+            else {
+                OverviewState state = opengl_widget->get_overview_page().value();
+                //opengl_widget->get_overview_offsets(&overview_offset_x, &overview_offset_y);
+                //opengl_widget->set_overview_offsets(overview_offset_x, overview_offset_y + smooth_scroll_speed * secs);
+                state.offset_y += smooth_scroll_speed * secs;
+                opengl_widget->set_overview_page(state);
+            }
+            float accel = SMOOTH_SCROLL_DRAG;
+            if (smooth_scroll_speed > 0) {
+                smooth_scroll_speed -= secs * accel;
+                if (smooth_scroll_speed < 0) smooth_scroll_speed = 0;
+                
+            }
+            else {
+                smooth_scroll_speed += secs * accel;
+                if (smooth_scroll_speed > 0) smooth_scroll_speed = 0;
+            }
+
+
+            last_speed_update_time = QTime::currentTime();
+        }
+    }
     if (!isVisible()) {
         return;
     }
@@ -621,7 +676,17 @@ void MainWidget::validate_render() {
         int current_page = get_current_page_number();
         if (current_page >= 0){
 			opengl_widget->set_visible_page_number(current_page);
-			main_document_view->set_offset_y(main_document_view->get_document()->get_accum_page_height(current_page) + main_document_view->get_document()->get_page_height(current_page) / 2);
+            if (IGNORE_WHITESPACE_IN_PRESENTATION_MODE) {
+                main_document_view->set_offset_y(
+                    main_document_view->get_document()->get_accum_page_height(current_page) +
+                    main_document_view->get_document()->get_page_height(current_page) / 2);
+            }
+            else {
+				main_document_view->set_offset_y(
+					main_document_view->get_document()->get_accum_page_height(current_page) +
+					main_document_view->get_document()->get_page_height(current_page) / 2 +
+					static_cast<float>(get_status_bar_height() / 2 / main_document_view->get_zoom_level()));
+            }
 			if (IGNORE_WHITESPACE_IN_PRESENTATION_MODE) {
 				main_document_view->fit_to_page_height(true);
 			}
@@ -651,6 +716,9 @@ void MainWidget::validate_render() {
     }
 
     is_render_invalidated = false;
+    if (smooth_scroll_mode && (smooth_scroll_speed != 0)) {
+        is_render_invalidated = true;
+    }
 }
 
 void MainWidget::validate_ui() {
@@ -690,14 +758,6 @@ QString MainWidget::get_status_stylesheet() {
     }
 }
 
-int MainWidget::get_status_bar_height() {
-    if (STATUS_BAR_FONT_SIZE > 0) {
-        return STATUS_BAR_FONT_SIZE + 5;
-    }
-    else {
-        return 20;
-    }
-}
 
 void MainWidget::on_config_file_changed(ConfigManager* new_config) {
 
@@ -1452,13 +1512,16 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
 
     if (mevent->button() == Qt::MouseButton::LeftButton) {
         if (is_shift_pressed) {
-            handle_command(command_manager.get_command_with_name(utf8_encode(SHIFT_CLICK_COMMAND)), 1);
+            //handle_command(command_manager.get_command_with_name(utf8_encode(SHIFT_CLICK_COMMAND)), 1);
+            run_multiple_commands(SHIFT_CLICK_COMMAND);
         }
         else if (is_control_pressed) {
-            handle_command(command_manager.get_command_with_name(utf8_encode(CONTROL_CLICK_COMMAND)), 1);
+            //handle_command(command_manager.get_command_with_name(utf8_encode(CONTROL_CLICK_COMMAND)), 1);
+            run_multiple_commands(CONTROL_CLICK_COMMAND);
         }
         else if (is_alt_pressed) {
-            handle_command(command_manager.get_command_with_name(utf8_encode(ALT_CLICK_COMMAND)), 1);
+            //handle_command(command_manager.get_command_with_name(utf8_encode(ALT_CLICK_COMMAND)), 1);
+            run_multiple_commands(ALT_CLICK_COMMAND);
         }
         else {
 			handle_left_click({ mevent->pos().x(), mevent->pos().y() }, false, is_shift_pressed, is_control_pressed, is_alt_pressed);
@@ -1474,13 +1537,13 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
 
     if (mevent->button() == Qt::MouseButton::RightButton) {
         if (is_shift_pressed) {
-            handle_command(command_manager.get_command_with_name(utf8_encode(SHIFT_RIGHT_CLICK_COMMAND)), 1);
+            run_multiple_commands(SHIFT_RIGHT_CLICK_COMMAND);
         }
         else if (is_control_pressed) {
-            handle_command(command_manager.get_command_with_name(utf8_encode(CONTROL_RIGHT_CLICK_COMMAND)), 1);
+            run_multiple_commands(CONTROL_RIGHT_CLICK_COMMAND);
         }
         else if (is_alt_pressed) {
-            handle_command(command_manager.get_command_with_name(utf8_encode(ALT_RIGHT_CLICK_COMMAND)), 1);
+            run_multiple_commands(ALT_RIGHT_CLICK_COMMAND);
         }
         else {
 			handle_right_click({ mevent->pos().x(), mevent->pos().y() }, false, is_shift_pressed, is_control_pressed, is_alt_pressed);
@@ -1491,7 +1554,7 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
         if (HIGHLIGHT_MIDDLE_CLICK
             && opengl_widget->selected_character_rects.size() > 0
             && !(opengl_widget && opengl_widget->get_overview_page())) {
-          handle_command(command_manager.get_command_with_name("add_highlight_with_current_type"), 1);
+          handle_command(command_manager->get_command_with_name("add_highlight_with_current_type"), 1);
         }
         else {
           smart_jump_under_pos({ mevent->pos().x(), mevent->pos().y() });
@@ -1526,11 +1589,11 @@ void MainWidget::mousePressEvent(QMouseEvent* mevent) {
     }
 
     if (mevent->button() == Qt::MouseButton::XButton1) {
-        handle_command(command_manager.get_command_with_name("prev_state"), 0);
+        handle_command(command_manager->get_command_with_name("prev_state"), 0);
     }
 
     if (mevent->button() == Qt::MouseButton::XButton2) {
-        handle_command(command_manager.get_command_with_name("next_state"), 0);
+        handle_command(command_manager->get_command_with_name("next_state"), 0);
     }
 }
 
@@ -1541,6 +1604,9 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
     //bool is_touchpad = true;
     float vertical_move_amount = VERTICAL_MOVE_AMOUNT * TOUCHPAD_SENSITIVITY;
     float horizontal_move_amount = HORIZONTAL_MOVE_AMOUNT * TOUCHPAD_SENSITIVITY;
+    if (is_hyperdrive_mode) {
+        vertical_move_amount *= HYPERDRIVE_SPEED_FACTOR;
+    }
 
     //if (is_touchpad) {
     //	vertical_move_amount *= TOUCHPAD_SENSITIVITY;
@@ -1582,7 +1648,7 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
             if (wevent->angleDelta().y() > 0) {
 
                 if (is_visual_mark_mode) {
-                    command = command_manager.get_command_with_name("move_visual_mark_up");
+                    command = command_manager->get_command_with_name("move_visual_mark_up");
                 }
                 else {
                     move_vertical(-72.0f * vertical_move_amount * num_repeats);
@@ -1592,7 +1658,7 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
             if (wevent->angleDelta().y() < 0) {
 
                 if (is_visual_mark_mode) {
-                    command = command_manager.get_command_with_name("move_visual_mark_down");
+                    command = command_manager->get_command_with_name("move_visual_mark_down");
                 }
                 else {
                     move_vertical(72.0f * vertical_move_amount * num_repeats);
@@ -1614,28 +1680,28 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
     if (is_control_pressed) {
         if (wevent->angleDelta().y() > 0) {
             if (WHEEL_ZOOM_ON_CURSOR) {
-				command = command_manager.get_command_with_name("zoom_in_cursor");
+				command = command_manager->get_command_with_name("zoom_in_cursor");
             }
 			else {
-				command = command_manager.get_command_with_name("zoom_in");
+				command = command_manager->get_command_with_name("zoom_in");
             }
         }
         if (wevent->angleDelta().y() < 0) {
             if (WHEEL_ZOOM_ON_CURSOR) {
-				command = command_manager.get_command_with_name("zoom_out_cursor");
+				command = command_manager->get_command_with_name("zoom_out_cursor");
             }
             else {
-				command = command_manager.get_command_with_name("zoom_out");
+				command = command_manager->get_command_with_name("zoom_out");
             }
         }
 
     }
     if (is_shift_pressed) {
         if (wevent->angleDelta().y() > 0) {
-            command = command_manager.get_command_with_name("move_left");
+            command = command_manager->get_command_with_name("move_left");
         }
         if (wevent->angleDelta().y() < 0) {
-            command = command_manager.get_command_with_name("move_right");
+            command = command_manager->get_command_with_name("move_right");
         }
 
     }
@@ -1737,7 +1803,8 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         //user-defined commands start with underscore
         handle_additional_command(utf8_decode(command->name));
     }
-    if (command->name == "goto_begining") {
+    if ((command->name == "goto_beginning") || (command->name ==  "goto_begining")) {
+
         if (num_repeats) {
             main_document_view->goto_page(num_repeats - 1 + main_document_view->get_page_offset());
         }
@@ -1747,7 +1814,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
     }
 
     if (command->name == "goto_end") {
-        if (num_repeats > 1) {
+        if (num_repeats > 0) {
             main_document_view->goto_page(num_repeats - 1 + main_document_view->get_page_offset());
         }
         else {
@@ -1755,6 +1822,19 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         }
     }
 
+    if (command->name == "toggle_smooth_scroll_mode") {
+        smooth_scroll_mode = !smooth_scroll_mode;
+
+        if (smooth_scroll_mode) {
+            validation_interval_timer->setInterval(16);
+        }
+        else {
+            validation_interval_timer->setInterval(200);
+        }
+    }
+    if (command->name == "toggle_hyperdrive_mode") {
+        is_hyperdrive_mode = !is_hyperdrive_mode;
+    }
     if (command->name == "toggle_select_highlight") {
         is_select_highlight_mode = !is_select_highlight_mode;
     }
@@ -1788,7 +1868,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
 			}
         }
         else {
-			
+
 			if (command->name == "move_down") {
 				move_document(0.0f, 72.0f * rp * VERTICAL_MOVE_AMOUNT);
 			}
@@ -1842,6 +1922,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
             db_manager,
             document_manager,
             config_manager,
+            command_manager,
             input_handler,
             checksummer,
             should_quit);
@@ -2401,7 +2482,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         return;
     }
     else if (command->name == "command") {
-        QStringList command_names = command_manager.get_all_command_names();
+        QStringList command_names = command_manager->get_all_command_names();
         set_current_widget(new CommandSelector(
             &on_command_done, this, command_names, input_handler->get_command_key_mappings()));
         current_widget->show();
@@ -2773,7 +2854,8 @@ void MainWidget::handle_portal() {
 void MainWidget::handle_pending_text_command(std::wstring text) {
     if (current_pending_command->name == "search" ||
         current_pending_command->name == "ranged_search" ||
-        current_pending_command->name == "chapter_search" ) {
+        current_pending_command->name == "chapter_search" ||
+        current_pending_command->name == "regex_search" ) {
 
         // When searching, the start position before search is saved in a mark named '0'
         main_document_view->add_mark('/');
@@ -2793,7 +2875,11 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
             }
         }
 
-        opengl_widget->search_text(search_term, search_range);
+        bool is_regex = current_pending_command->name == "regex_search";
+        if (is_regex && (!SUPER_FAST_SEARCH)) {
+            show_error_message(L"regex search only works when super_fast_search is enabled in prefs_user.config");
+        }
+        opengl_widget->search_text(search_term, is_regex, search_range);
     }
 
     if (current_pending_command->name[0] == '_') {
@@ -2898,6 +2984,12 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
         }
     }
 
+    if (current_pending_command->name == "set_custom_text_color") {
+        parse_color(text, CUSTOM_TEXT_COLOR, 3);
+    }
+    if (current_pending_command->name == "set_custom_background_color") {
+        parse_color(text, CUSTOM_BACKGROUND_COLOR, 3);
+    }
     if (current_pending_command->name == "set_page_offset") {
 
         if (is_string_numeric(text.c_str()) && text.size() < 6) { // make sure the page number is valid
@@ -2938,11 +3030,16 @@ void MainWidget::handle_pending_text_command(std::wstring text) {
             db_manager->import_json(import_file_name, checksummer);
         }
         else{
-            const Command* command = command_manager.get_command_with_name(utf8_encode(text));
+            const Command* command = command_manager->get_command_with_name(utf8_encode(text));
             if (command != nullptr) {
                 handle_command(command, 1);
             }
         }
+    }
+    std::string config_prefix = "setconfig_";
+    if (current_pending_command->name.find(config_prefix) == 0) {
+        std::string config_name = current_pending_command->name.substr(config_prefix.size(), current_pending_command->name.size() - config_prefix.size());
+        config_manager->deserialize_config(config_name, text);
     }
 }
 
@@ -3055,7 +3152,7 @@ std::optional<std::wstring> MainWidget::get_current_file_name() {
 }
 
 CommandManager* MainWidget::get_command_manager(){
-    return &command_manager;
+    return command_manager;
 }
 
 void MainWidget::toggle_dark_mode() {
@@ -3166,8 +3263,14 @@ void MainWidget::handle_paper_name_on_pointer(std::wstring paper_name, bool is_s
 
 }
 void MainWidget::move_vertical(float amount) {
-    move_document(0, amount);
-    validate_render();
+    if (!smooth_scroll_mode) {
+		move_document(0, amount);
+		validate_render();
+    }
+    else {
+        smooth_scroll_speed += amount * SMOOTH_SCROLL_SPEED;
+		validate_render();
+    }
 }
 
 void MainWidget::move_horizontal(float amount){
@@ -3358,7 +3461,7 @@ void MainWidget::dropEvent(QDropEvent* event)
     if (event->mimeData()->hasUrls()) {
         auto urls = event->mimeData()->urls();
         std::wstring path = urls.at(0).toString().toStdWString();
-        // ignore file:/// at the begining of the URL
+        // ignore file:/// at the beginning of the URL
 #ifdef Q_OS_WIN
         path = path.substr(8, path.size() - 8);
 #else
@@ -3432,7 +3535,7 @@ void MainWidget::show_password_prompt_if_required() {
 	if (main_document_view && (main_document_view->get_document() != nullptr)) {
 		if (main_document_view->get_document()->needs_authentication()) {
             if ((!current_pending_command.has_value()) || (current_pending_command->name != "enter_password")) {
-				handle_command(command_manager.get_command_with_name("enter_password"), 1);
+				handle_command(command_manager->get_command_with_name("enter_password"), 1);
 			}
 		}
 	}
@@ -3457,7 +3560,7 @@ void MainWidget::on_new_paper_added(const std::wstring& file_path) {
         if (helper_document_view) {
             float helper_view_width = helper_document_view->get_view_width();
             float helper_view_height = helper_document_view->get_view_height();
-            float zoom_level = helper_view_width / first_page_width; 
+            float zoom_level = helper_view_width / first_page_width;
             dst_view_state.book_state.zoom_level = zoom_level;
 			dst_view_state.book_state.offset_y = -std::abs(-helper_view_height / zoom_level / 2 + first_page_height / 2);
         }
@@ -3504,7 +3607,7 @@ std::wstring MainWidget::get_serialized_configuration_string() {
     return overview_config_string + get_window_configuration_string();
 }
 std::wstring MainWidget::get_window_configuration_string() {
-	
+
 	QString config_string_multi = "main_window_size    %1 %2\nmain_window_move     %3 %4\nhelper_window_size    %5 %6\nhelper_window_move     %7 %8";
 	QString config_string_single = "single_main_window_size    %1 %2\nsingle_main_window_move     %3 %4";
 
@@ -3628,7 +3731,7 @@ void MainWidget::scroll_overview_up() {
 }
 
 int MainWidget::get_current_page_number() const {
-    // 
+    //
     if (opengl_widget->get_should_draw_vertical_line()) {
         return main_document_view->get_vertical_line_page();
     }
@@ -3685,7 +3788,7 @@ bool MainWidget::execute_predefined_command(char symbol) {
 		}
 		else {
             if (!current_pending_command) {
-                current_pending_command = *command_manager.get_command_with_name("execute_predefined_command");
+                current_pending_command = *command_manager->get_command_with_name("execute_predefined_command");
             }
 			current_pending_command.value().requires_text = true;
 			current_pending_command.value().requires_symbol = false;
@@ -3807,7 +3910,7 @@ void MainWidget::handle_additional_command(std::wstring command_name, bool wait)
 		std::wstring command_to_execute = ADDITIONAL_COMMANDS[command_name];
 		if (command_requires_text(command_to_execute)) {
 			if (!current_pending_command) {
-				current_pending_command = *command_manager.get_command_with_name(utf8_encode(command_name));
+				current_pending_command = *command_manager->get_command_with_name(utf8_encode(command_name));
 			}
 			current_pending_command.value().requires_text = true;
 			current_pending_command.value().requires_symbol = false;
@@ -3818,6 +3921,9 @@ void MainWidget::handle_additional_command(std::wstring command_name, bool wait)
 			execute_command(command_to_execute, L"", wait);
 		}
 	}
+    else if (ADDITIONAL_MACROS.find(command_name) != ADDITIONAL_MACROS.end()) {
+        run_multiple_commands(ADDITIONAL_MACROS[command_name]);
+    }
 }
 
 std::optional<DocumentPos> MainWidget::get_overview_position() {
@@ -3853,7 +3959,7 @@ void MainWidget::add_portal(std::wstring source_path, Link new_link) {
 
 void MainWidget::handle_keyboard_select(const std::wstring& text) {
 	if (std::isdigit(text[0])) {
-        // we can select text 
+        // we can select text
 		QStringList parts = QString::fromStdWString(text).split(' ');
         if (parts.size() == 2) {
             QString begin_text = parts.at(0);
@@ -3908,6 +4014,27 @@ void MainWidget::handle_keyboard_select(const std::wstring& text) {
 void MainWidget::run_multiple_commands(const std::wstring& commands) {
     QStringList command_list = QString::fromStdWString(commands).split(';');
     for (auto command : command_list) {
-		handle_command(command_manager.get_command_with_name(command.toStdString()), 1);
+        std::string command_name;
+        std::wstring command_arg;
+
+        parse_command_string(command.toStdWString(), command_name, command_arg);
+
+        const Command* com = command_manager->get_command_with_name(command_name);
+        if (com) {
+			if (com->requires_text) {
+				handle_command_with_text(com, command_arg);
+				continue;
+			}
+			else if (com->requires_symbol && command_arg.size() > 0) {
+				handle_command_with_symbol(com, command_arg[0]);
+				continue;
+			}
+			else{
+				handle_command(com, 0);
+				continue;
+			}
+			//handle_command(command_manager.get_command_with_name(command.toStdString()), 1);
+
+        }
     }
 }

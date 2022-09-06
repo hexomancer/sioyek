@@ -12,9 +12,10 @@
 extern bool SHOULD_WARN_ABOUT_USER_KEY_OVERRIDE;
 extern bool USE_LEGACY_KEYBINDS;
 extern std::map<std::wstring, std::wstring> ADDITIONAL_COMMANDS;
+extern std::map<std::wstring, std::wstring> ADDITIONAL_MACROS;
 
-CommandManager::CommandManager() {
-	commands.push_back({ "goto_begining",				false,	false,	false,	true,	true,	{}});
+CommandManager::CommandManager(ConfigManager* config_manager) {
+	commands.push_back({ "goto_beginning",				false,	false,	false,	true,	true,	{}});
 	commands.push_back({ "goto_end",					false,	false,	false,	true,	true,	{}});
 	commands.push_back({ "goto_definition",				false,	false,	false,	true,	true,	{}});
 	commands.push_back({ "overview_definition",			false,	false,	false,	false,	true,	{}});
@@ -25,6 +26,7 @@ CommandManager::CommandManager() {
 	commands.push_back({ "goto_mark",					false,	true,	false,	true,	true,	{'`', '\'', '/'}});
 	commands.push_back({ "goto_page_with_page_number",	true,	false,	false,	true,	true,	{}});
 	commands.push_back({ "search",						true,	false,	false,	true,	true,	{}});
+	commands.push_back({ "regex_search",				true,	false,	false,	true,	true,	{}});
 	commands.push_back({ "ranged_search",				true,	false,	false,	false,	true,	{}});
 	commands.push_back({ "chapter_search",				true,	false,	false,	false,	true,	{}});
 	commands.push_back({ "move_down",					false,	false,	false,	false,	true,	{}});
@@ -155,14 +157,32 @@ CommandManager::CommandManager() {
 	commands.push_back({ "goto_selected_text",			false,	false,	false,	false,	true,	{}});
 	commands.push_back({ "focus_text",					true,	false,	false,	false,	true,	{}});
 	commands.push_back({ "goto_window",					false,	false,	false,	false,	false,	{}});
+	commands.push_back({ "set_custom_text_color",		true,	false,	false,	false,	false,	{}});
+	commands.push_back({ "set_custom_background_color",	true,	false,	false,	false,	false,	{}});
+	commands.push_back({ "toggle_hyperdrive_mode",		false,	false,	false,	false,	false,	{}});
+	commands.push_back({ "toggle_smooth_scroll_mode",	false,	false,	false,	false,	false,	{}});
+	commands.push_back({ "goto_begining",				false,	false,	false,	true,	true,	{}});
 
 	for (auto [command_name, _] : ADDITIONAL_COMMANDS) {
+		commands.push_back({ utf8_encode(command_name) , false, false, false, false, true});
+	}
+
+	for (auto [command_name, _] : ADDITIONAL_MACROS) {
 		commands.push_back({ utf8_encode(command_name) , false, false, false, false, true});
 	}
 
 	for (char c = 'a'; c <= 'z'; c++) {
 		commands.push_back({ "execute_command_"  +  std::string(1, c), false, false , false, false, true, {}});
 	}
+
+	std::vector<Config> configs = config_manager->get_configs();
+
+	for (auto conf : configs) {
+		std::string config_set_command_name = "setconfig_" + utf8_encode(conf.name);
+		commands.push_back({ config_set_command_name, true, false , false, false, true, {} });
+
+	}
+
 }
 
 const Command* CommandManager::get_command_with_name(std::string name) {
@@ -488,7 +508,8 @@ InputParseTreeNode* parse_key_config_files(const Path& default_path,
 }
 
 
-InputHandler::InputHandler(const Path& default_path, const std::vector<Path>& user_paths) {
+InputHandler::InputHandler(const Path& default_path, const std::vector<Path>& user_paths, CommandManager* cm) {
+	command_manager = cm;
 	user_key_paths = user_paths;
 	reload_config_files(default_path, user_paths);
 }
@@ -557,7 +578,7 @@ std::vector<const Command*> InputHandler::handle_key(QKeyEvent* key_event, bool 
 
 				//return command_manager.get_command_with_name(child->name);
 				for (size_t i = 0; i < child->name.size(); i++) {
-					res.push_back(command_manager.get_command_with_name(child->name[i]));
+					res.push_back(command_manager->get_command_with_name(child->name[i]));
 				}
 				return res;
 			}
