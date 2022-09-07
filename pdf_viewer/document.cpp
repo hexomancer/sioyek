@@ -2364,9 +2364,7 @@ std::vector<SearchResult> Document::search_text(std::wstring query, int begin_pa
 		}
 
 		merge_selected_character_rects(match_rects, compressed_match_rects);
-		SearchResult res;
-		res.page = match_page;
-		res.rect = compressed_match_rects[0];
+		SearchResult res { compressed_match_rects, match_page };
 
 		if (!((match_page < min_page) || (match_page > max_page))) {
 			if (is_before) {
@@ -2428,9 +2426,7 @@ std::vector<SearchResult> Document::search_regex(std::wstring query, int begin_p
 			}
 
 			merge_selected_character_rects(match_rects, compressed_match_rects);
-			SearchResult res;
-			res.page = match_page;
-			res.rect = compressed_match_rects[0];
+			SearchResult res { compressed_match_rects, match_page };
 
 			if (!((match_page < min_page) || (match_page > max_page))) {
 				if (is_before) {
@@ -2453,5 +2449,12 @@ std::vector<SearchResult> Document::search_regex(std::wstring query, int begin_p
 	}
 	output.insert(output.end(), before_results.begin(), before_results.end());
 	return output;
+
+}
+
+float Document::max_y_offset() {
+	int np = num_pages();
+
+	return get_accum_page_height(np - 1) + get_page_height(np - 1);
 
 }
