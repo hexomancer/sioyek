@@ -112,6 +112,9 @@ extern float SMOOTH_SCROLL_SPEED;
 extern float SMOOTH_SCROLL_DRAG;
 extern bool IGNORE_STATUSBAR_IN_PRESENTATION_MODE;
 extern bool SUPER_FAST_SEARCH;
+extern bool SHOW_CLOSEST_BOOKMARK_IN_STATUSBAR;
+
+const int MAX_SCROLLBAR = 10000;
 
 bool MainWidget::main_document_view_has_document()
 {
@@ -430,12 +433,33 @@ MainWidget::MainWidget(fz_context* mupdf_context,
     validation_interval_timer->start();
 
 
+    scroll_bar = new QScrollBar(this);
     QVBoxLayout* layout = new QVBoxLayout;
+    QHBoxLayout* hlayout = new QHBoxLayout;
+
+    hlayout->addWidget(opengl_widget);
+    hlayout->addWidget(scroll_bar);
+
     layout->setSpacing(0);
     layout->setContentsMargins(0, 0, 0, 0);
     opengl_widget->setAttribute(Qt::WA_TransparentForMouseEvents);
-    layout->addWidget(opengl_widget);
+    layout->addLayout(hlayout);
     setLayout(layout);
+
+    scroll_bar->setMinimum(0);
+    scroll_bar->setMaximum(MAX_SCROLLBAR);
+
+    scroll_bar->connect(scroll_bar, &QScrollBar::actionTriggered, [this](int action) {
+        int value = scroll_bar->value();
+        if (main_document_view_has_document()) {
+            float offset = doc()->max_y_offset() * value / static_cast<float>(scroll_bar->maximum());
+            main_document_view->set_offset_y(offset);
+            validate_render();
+        }
+        });
+
+
+    scroll_bar->hide();
 
     setFocus();
 }
@@ -531,6 +555,13 @@ std::wstring MainWidget::get_status_string() {
         ss << " [ locked horizontal scroll ]";
     }
     ss << " [ h:" << select_highlight_type << " ]";
+
+    if (SHOW_CLOSEST_BOOKMARK_IN_STATUSBAR) {
+        std::optional<BookMark> closest_bookmark = main_document_view->find_closest_bookmark();
+        if (closest_bookmark) {
+            ss << " [ " << closest_bookmark.value().description << " ] ";
+        }
+    }
 
     if (custom_status_message.size() > 0) {
         ss << " [ " << custom_status_message << " ]";
@@ -699,6 +730,7 @@ void MainWidget::validate_render() {
 
     if (main_document_view && main_document_view->get_document()) {
         std::optional<Link> link = main_document_view->find_closest_link();
+
         if (link) {
             helper_document_view->goto_link(&link.value());
         }
@@ -766,7 +798,7 @@ void MainWidget::on_config_file_changed(ConfigManager* new_config) {
 
     int status_bar_height = get_status_bar_height();
     status_label->move(0, main_window_height - status_bar_height);
-    status_label->resize(main_window_width, status_bar_height);
+    status_label->resize(size().width(), status_bar_height);
 
     text_command_line_edit_container->setStyleSheet("background-color: black; color: white; border: none;");
 }
@@ -1024,6 +1056,12 @@ void MainWidget::open_document(const Path& path, std::optional<float> offset_x, 
     opengl_widget->on_document_view_reset();
     show_password_prompt_if_required();
 
+    if (main_document_view_has_document()) {
+        scroll_bar->setSingleStep(std::max(MAX_SCROLLBAR / doc()->num_pages() / 10, 1));
+        scroll_bar->setPageStep(MAX_SCROLLBAR / doc()->num_pages());
+        update_scrollbar();
+    }
+
 
 }
 
@@ -1125,6 +1163,7 @@ void MainWidget::handle_command_types(const Command* command, int num_repeats) {
     else {
         handle_command(command, num_repeats);
     }
+    update_scrollbar();
 }
 
 void MainWidget::key_event(bool released, QKeyEvent* kevent) {
@@ -1653,6 +1692,7 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
                 }
                 else {
                     move_vertical(-72.0f * vertical_move_amount * num_repeats);
+					update_scrollbar();
                     return;
                 }
             }
@@ -1663,6 +1703,7 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
                 }
                 else {
                     move_vertical(72.0f * vertical_move_amount * num_repeats);
+					update_scrollbar();
                     return;
                 }
             }
@@ -1821,6 +1862,10 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         else {
 			main_document_view->goto_end();
         }
+    }
+
+    if (command->name == "toggle_scrollbar") {
+        toggle_scrollbar();
     }
 
     if (command->name == "toggle_smooth_scroll_mode") {
@@ -2055,6 +2100,29 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
             opengl_widget->set_should_draw_vertical_line(false);
         }
     }
+    else if (command->name == "overview_to_portal") {
+		if (opengl_widget->get_overview_page()) {
+            opengl_widget->set_overview_page({});
+		}
+		else {
+
+			OverviewState overview_state;
+			std::optional<Link> portal_ = main_document_view->find_closest_link();
+			if (portal_) {
+				Link portal = portal_.value();
+				auto destination_path = checksummer->get_path(portal.dst.document_checksum);
+				if (destination_path) {
+					Document* doc = document_manager->get_document(destination_path.value());
+					if (doc) {
+						overview_state.absolute_offset_y = portal.dst.book_state.offset_y;
+						overview_state.doc = doc;
+						opengl_widget->set_overview_page(overview_state);
+					}
+				}
+			}
+		}
+
+	}
     else if (command->name == "overview_definition") {
 		if (!opengl_widget->get_overview_page()) {
 			std::vector<DocumentPos> defpos = main_document_view->find_line_definitions();
@@ -2603,11 +2671,7 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
         overview_under_pos({ mouse_pos.x(), mouse_pos.y() });
     }
     else if (command->name == "goto_overview") {
-		std::optional<DocumentPos> maybe_overview_position = get_overview_position();
-        if (maybe_overview_position.has_value()) {
-            long_jump_to_destination(maybe_overview_position.value());
-			opengl_widget->set_overview_page({});
-        }
+		goto_overview();
     }
     else if (command->name == "goto_selected_text") {
 		long_jump_to_destination(selection_begin.y);
@@ -3373,6 +3437,7 @@ void MainWidget::apply_window_params_for_one_window_mode(bool force_resize){
     bool should_maximize = main_window_width == main_window_size[0];
 
     if (should_maximize) {
+        main_window->move(main_window_move[0], main_window_move[1]);
         main_window->hide();
         if (force_resize) {
 			main_window->resize(main_window_size[0], main_window_size[1]);
@@ -3721,6 +3786,7 @@ void MainWidget::scroll_overview_down() {
 	OverviewState state = opengl_widget->get_overview_page().value();
 	state.absolute_offset_y += 36.0f * vertical_move_amount;
 	opengl_widget->set_overview_page(state);
+    handle_portal_overview_update();
 }
 
 void MainWidget::scroll_overview_up() {
@@ -3728,7 +3794,7 @@ void MainWidget::scroll_overview_up() {
 	OverviewState state = opengl_widget->get_overview_page().value();
 	state.absolute_offset_y -= 36.0f * vertical_move_amount;
 	opengl_widget->set_overview_page(state);
-
+    handle_portal_overview_update();
 }
 
 int MainWidget::get_current_page_number() const {
@@ -3819,12 +3885,15 @@ void MainWidget::focus_text(int page, const std::wstring& text) {
             max_score = score;
         }
     }
-    main_document_view->set_line_index(max_index);
-	main_document_view->set_vertical_line_rect(line_rects[max_index]);
-	if (focus_on_visual_mark_pos(true)) {
-		float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
-		main_document_view->move_absolute(0, distance);
-	}
+
+    if (max_index < line_rects.size()) {
+		main_document_view->set_line_index(max_index);
+		main_document_view->set_vertical_line_rect(line_rects[max_index]);
+		if (focus_on_visual_mark_pos(true)) {
+			float distance = (main_document_view->get_view_height() / main_document_view->get_zoom_level()) * VISUAL_MARK_NEXT_PAGE_FRACTION / 2;
+			main_document_view->move_absolute(0, distance);
+		}
+    }
 }
 int MainWidget::get_current_monitor_width() {
     if (this->window()->windowHandle() != nullptr) {
@@ -4038,5 +4107,60 @@ void MainWidget::run_multiple_commands(const std::wstring& commands) {
 			//handle_command(command_manager.get_command_with_name(command.toStdString()), 1);
 
         }
+    }
+}
+
+void MainWidget::toggle_scrollbar() {
+    if (scroll_bar->isVisible()) {
+        scroll_bar->hide();
+    }
+    else {
+        scroll_bar->show();
+    }
+    main_window_width = opengl_widget->width();
+}
+
+void MainWidget::update_scrollbar() {
+    if (main_document_view_has_document()) {
+        float offset = main_document_view->get_offset_y();
+        int scroll = static_cast<int>(MAX_SCROLLBAR * offset / doc()->max_y_offset());
+        scroll_bar->setValue(scroll);
+    }
+}
+
+void MainWidget::handle_portal_overview_update() {
+    std::optional<OverviewState> current_state_ = opengl_widget->get_overview_page();
+    if (current_state_) {
+        OverviewState current_state = current_state_.value();
+        if (current_state.doc != nullptr) {
+            std::optional<Link> link_ = main_document_view->find_closest_link();
+            if (link_) {
+                Link link = link_.value();
+                OpenedBookState link_new_state = link.dst.book_state;
+                link_new_state.offset_y = current_state.absolute_offset_y;
+                update_link_with_opened_book_state(link, link_new_state);
+            }
+        }
+    }
+}
+
+void MainWidget::goto_overview() {
+    if (opengl_widget->get_overview_page()) {
+        OverviewState overview = opengl_widget->get_overview_page().value();
+        if (overview.doc != nullptr) {
+            std::optional<Link> closest_link_ = main_document_view->find_closest_link();
+            if (closest_link_) {
+                push_state();
+                open_document(closest_link_.value().dst);
+            }
+        }
+        else {
+			std::optional<DocumentPos> maybe_overview_position = get_overview_position();
+			if (maybe_overview_position.has_value()) {
+				long_jump_to_destination(maybe_overview_position.value());
+			}
+        }
+		opengl_widget->set_overview_page({});
+
     }
 }

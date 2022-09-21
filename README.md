@@ -1,6 +1,10 @@
 # Sioyek
 
 Sioyek is a PDF viewer designed for reading research papers and technical books.
+
+## Help Wanted
+I want to do a video tutorial on sioyek, but I am not very good at making videos. If you are interested in collaborating on doing an official video tutorial for sioyek, please contact me at a.hr.mostafavi@gmail.com .
+
 ## Contents
 * [Installation](#install)
 * [Documentation](#documentation)
@@ -35,12 +39,6 @@ You can view the official documentation [here](https://sioyek-documentation.read
 ## Feature Video Overview
 
 [![Sioyek feature overview](https://img.youtube.com/vi/yTmCI0Xp5vI/0.jpg)](https://www.youtube.com/watch?v=yTmCI0Xp5vI)
-
-## Sponsors
-
-I would like to thank [macstadium](https://macstadium.com) for providing cloud mac instances. I don't have a mac computer myself, so these help a lot with Mac builds.
-
-<img src="https://uploads-ssl.webflow.com/5ac3c046c82724970fc60918/5c019d917bba312af7553b49_MacStadium-developerlogo.png" width="300">
 
 ## Features
 
@@ -109,7 +107,25 @@ You can customize all key bindings and some UI elements by editing `keys_user.co
 ## Build Instructions
 
 ### Linux
+
+#### Fedora
+
+Run the following commands to install dependencies, clone the repository and compile sioyek on Fedora (tested on Fedora Workstation 36).
+
+Notice that we change `qmake` into `qmake-qt5` in `build_linux.sh` since in Fedora `qmake` points to qmake for Qt 3.x, while we need qmake for Qt 5.x:
+
+```
+sudo dnf install qt5-qtbase-devel qt5-qtbase-static qt5-qt3d-devel harfbuzz-devel
+git clone --recursive https://github.com/ahrm/sioyek
+cd sioyek
+sed -i "s/qmake/qmake-qt5/g" build_linux.sh
+./build_linux.sh
+``` 
+
+#### Generic distribution
 1. Install Qt 5 and make sure `qmake` is in `PATH`.
+
+    Run `qmake --version` to make sure the `qmake` in path is using Qt 5.x.
 2. Install `libharfbuzz`:
 ```
 sudo apt install libharfbuzz-dev
@@ -120,6 +136,14 @@ git clone --recursive https://github.com/ahrm/sioyek
 cd sioyek
 ./build_linux.sh
 ```
+
+#### Non-US keyboard layout
+
+If you adopt a non-US keyboard layout, run the following after compiling sioyek:
+```
+./linux_non_us_keyboard.sh
+```
+
 ### Windows
 1. Install Visual Studio (tested on 2019, other relatively recent versions should work too)
 2. Install Qt 5 and make sure qmake is in `PATH`.
