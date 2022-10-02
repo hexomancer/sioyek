@@ -29,13 +29,13 @@ public:
 	bool select_mark(const std::string& checksum, std::vector<Mark>& out_result);
 	bool insert_bookmark(const std::string& checksum, const std::wstring& desc, float offset_y);
 	bool select_bookmark(const std::string& checksum, std::vector<BookMark>& out_result);
-	bool insert_link(const std::string& src_checksum, const std::string& dst_checksum, float dst_offset_y, float dst_offset_x, float dst_zoom_level, float src_offset_y);
-	bool select_links(const std::string& src_checksum, std::vector<Link>& out_result);
+	bool insert_portal(const std::string& src_checksum, const std::string& dst_checksum, float dst_offset_y, float dst_offset_x, float dst_zoom_level, float src_offset_y);
+	bool select_links(const std::string& src_checksum, std::vector<Portal>& out_result);
 	bool delete_link(const std::string& src_checksum, float src_offset_y);
 	bool delete_bookmark(const std::string& src_checksum, float src_offset_y);
 	bool global_select_bookmark(std::vector<std::pair<std::string, BookMark>>& out_result);
 	bool global_select_highlight(std::vector<std::pair<std::string, Highlight>>& out_result);
-	bool update_link(const std::string& checksum, float dst_offset_x, float dst_offset_y, float dst_zoom_level, float src_offset_y);
+	bool update_portal(const std::string& checksum, float dst_offset_x, float dst_offset_y, float dst_zoom_level, float src_offset_y);
 	bool select_opened_books_path_values(std::vector<std::wstring>& out_result);
 	bool delete_mark_with_symbol(char symbol);
 	bool select_global_mark(char symbol, std::vector<std::pair<std::string, float>>& out_result);

@@ -32,13 +32,12 @@ private:
 	std::vector<Mark> marks;
 	std::vector<BookMark> bookmarks;
 	std::vector<Highlight> highlights;
-	std::vector<Link> links;
+	std::vector<Portal> portals;
 	DatabaseManager* db_manager = nullptr;
 	std::vector<TocNode*> top_level_toc_nodes;
 	std::vector<TocNode*> created_top_level_toc_nodes;
 	std::vector<std::wstring> flat_toc_names;
 	std::vector<int> flat_toc_pages;
-	QNetworkAccessManager* network_access_manager = nullptr;
 	std::map<int, std::vector<fz_rect>> cached_page_line_rects;
 	std::map<int, std::vector<std::wstring>> cached_line_texts;
 
@@ -81,9 +80,9 @@ private:
 	//std::map<std::wstring, IndexedData> equation_indices;
 	std::map<std::wstring, std::vector<IndexedData>> equation_indices;
 
-	std::mutex figure_indices_mutex;
-	std::optional<std::thread> figure_indexing_thread = {};
-	bool is_figure_indexing_required = true;
+	std::mutex document_indexing_mutex;
+	std::optional<std::thread> document_indexing_thread = {};
+	bool is_document_indexing_required = true;
 	bool is_indexing = false;
 	bool are_highlights_loaded = false;
 
@@ -116,7 +115,7 @@ public:
 	void add_highlight(const std::wstring& desc, const std::vector<fz_rect>& highlight_rects, AbsoluteDocumentPos selection_begin, AbsoluteDocumentPos selection_end, char type);
 	//void add_highlight_annotation(const Highlight& highlight, const std::vector<fz_rect>& selected_rects);
 	void delete_highlight_with_index(int index);
-	void delete_highlight_with_offsets(float begin_x, float begin_y, float end_x, float end_y);
+	void delete_highlight(Highlight hl);
 	//void delete_highlight_annotation(const Highlight& highlight);
 
 	void fill_highlight_rects(fz_context* ctx);
@@ -126,19 +125,19 @@ public:
 	bool get_is_indexing();
 	fz_stext_page* get_stext_with_page_number(fz_context* ctx, int page_number);
 	fz_stext_page* get_stext_with_page_number(int page_number);
-	void add_link(Link link, bool insert_into_database = true);
+	void add_portal(Portal link, bool insert_into_database = true);
 	std::wstring get_path();
 	std::string get_checksum();
 	std::optional<std::string> get_checksum_fast();
-	int find_closest_bookmark_index(float to_offset_y);
+	//int find_closest_bookmark_index(float to_offset_y);
 
-	int find_closest_sorted_bookmark_index(const std::vector<BookMark>& sorted_bookmarks, float to_offset_y) const;
-	int find_closest_sorted_highlight_index(const std::vector<Highlight>& sorted_highlights, float to_offset_y) const;
+	int find_closest_bookmark_index(const std::vector<BookMark>& sorted_bookmarks, float to_offset_y) const;
+	int find_closest_highlight_index(const std::vector<Highlight>& sorted_highlights, float to_offset_y) const;
 
-	std::optional<Link> find_closest_link(float to_offset_y, int* index = nullptr);
-	bool update_link(Link new_link);
+	std::optional<Portal> find_closest_portal(float to_offset_y, int* index = nullptr);
+	bool update_portal(Portal new_link);
 	void delete_closest_bookmark(float to_y_offset);
-	void delete_closest_link(float to_offset_y);
+	void delete_closest_portal(float to_offset_y);
 	const std::vector<BookMark>& get_bookmarks() const;
 	std::vector<BookMark> get_sorted_bookmarks() const;
 	const std::vector<Highlight>& get_highlights() const;
@@ -169,9 +168,6 @@ public:
 	float get_page_size_smart(bool width, int page_index, float* left_ratio, float* right_ratio, int* normal_page_width);
 	float get_accum_page_height(int page_index);
 	void rotate();
-	//const vector<float>& get_page_heights();
-	//const vector<float>& get_page_widths();
-	//const vector<float>& get_accum_page_heights();
 	void get_visible_pages(float doc_y_range_begin, float doc_y_range_end, std::vector<int>& visible_pages);
 	void load_page_dimensions(bool force_load_now);
 	int num_pages();
@@ -179,10 +175,8 @@ public:
 	DocumentPos absolute_to_page_pos(AbsoluteDocumentPos absolute_pos);
 	fz_rect absolute_to_page_rect(const fz_rect& absolute_rect, int* page);
 	QStandardItemModel* get_toc_model();
-	void page_pos_to_absolute_pos(int page, float page_x, float page_y, float* abs_x, float* abs_y);
-	fz_rect page_rect_to_absolute_rect(int page, fz_rect page_rect);
 	int get_offset_page_number(float y_offset);
-	void index_figures(bool* invalid_flag);
+	void index_document(bool* invalid_flag);
 	void stop_indexing();
 	std::optional<IndexedData> find_reference_with_string(std::wstring reference_name);
 	std::optional<IndexedData> find_equation_with_string(std::wstring equation_name, int page_number);
@@ -222,7 +216,7 @@ public:
 	bool needs_password();
 	bool needs_authentication();
 	bool apply_password(const char* password);
-	std::optional<std::string> get_page_fastread_highlights(int page);
+	//std::optional<std::string> get_page_fastread_highlights(int page);
 	std::vector<fz_rect> get_highlighted_character_masks(int page);
 	fz_rect get_page_rect_no_cache(int page);
 	std::optional<PdfLink> get_link_in_pos(int page, float x, float y);
@@ -236,8 +230,8 @@ public:
 		std::vector<TocNode*>& top_level_node);
 
 	float document_to_absolute_y(int page, float doc_y);
-	AbsoluteDocumentPos document_to_absolute_pos(DocumentPos);
-	fz_rect document_to_absolute_rect(int page, fz_rect doc_rect);
+	AbsoluteDocumentPos document_to_absolute_pos(DocumentPos, bool center_mid=false);
+	fz_rect document_to_absolute_rect(int page, fz_rect doc_rect, bool center_mid=false);
 
 	//void get_ith_next_line_from_absolute_y(float absolute_y, int i, bool cont, float* out_begin, float* out_end);
 	fz_rect get_ith_next_line_from_absolute_y(int page, int line_index, int i, bool cont, int* out_index, int* out_page);

@@ -64,8 +64,8 @@ DocumentViewState DocumentView::get_state() {
 	return res;
 }
 
-LinkViewState DocumentView::get_checksum_state() {
-	LinkViewState res;
+PortalViewState DocumentView::get_checksum_state() {
+	PortalViewState res;
 
 	if (current_document) {
 		res.document_checksum = current_document->get_checksum();
@@ -124,9 +124,9 @@ Document* DocumentView::get_document() {
 //	return current_search_result_index;
 //}
 
-std::optional<Link> DocumentView::find_closest_link() {
+std::optional<Portal> DocumentView::find_closest_portal() {
 	if (current_document) {
-		return current_document->find_closest_link(offset_y);
+		return current_document->find_closest_portal(offset_y);
 	}
 	return {};
 }
@@ -134,7 +134,7 @@ std::optional<Link> DocumentView::find_closest_link() {
 std::optional<BookMark> DocumentView::find_closest_bookmark() {
 
 	if (current_document) {
-		int bookmark_index = current_document->find_closest_bookmark_index(offset_y);
+		int bookmark_index = current_document->find_closest_bookmark_index(current_document->get_bookmarks(), offset_y);
 		const std::vector<BookMark>& bookmarks = current_document->get_bookmarks();
 		if ((bookmark_index >= 0) && (bookmark_index < bookmarks.size())) {
 			if (std::abs(bookmarks[bookmark_index].y_offset - offset_y) < 1000.0f) {
@@ -145,7 +145,7 @@ std::optional<BookMark> DocumentView::find_closest_bookmark() {
 	return {};
 }
 
-void DocumentView::goto_link(Link* link) {
+void DocumentView::goto_link(Portal* link) {
 	if (link) {
 		if (get_document() &&
 			get_document()->get_checksum() == link->dst.document_checksum) {
@@ -161,9 +161,9 @@ void DocumentView::goto_link(Link* link) {
 	}
 }
 
-void DocumentView::delete_closest_link() {
+void DocumentView::delete_closest_portal() {
 	if (current_document) {
-		current_document->delete_closest_link(offset_y);
+		current_document->delete_closest_portal(offset_y);
 	}
 }
 
@@ -181,8 +181,8 @@ void DocumentView::delete_highlight_with_index(int index) {
 	current_document->delete_highlight_with_index(index);
 }
 
-void DocumentView::delete_highlight_with_offsets(float begin_x, float begin_y, float end_x, float end_y) {
-	current_document->delete_highlight_with_offsets(begin_x, begin_y, end_x, end_y);
+void DocumentView::delete_highlight(Highlight hl) {
+	current_document->delete_highlight(hl);
 }
 
 void DocumentView::delete_closest_bookmark_to_offset(float offset) {
