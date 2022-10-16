@@ -173,7 +173,7 @@ public:
 					key_event->key() == Qt::Key_Left ||
 					key_event->key() == Qt::Key_Right
 					) {
-					QKeyEvent* newEvent = new QKeyEvent(*key_event);
+					QKeyEvent* newEvent = key_event->clone();
 					QCoreApplication::postEvent(get_view(), newEvent);
 					//QCoreApplication::postEvent(tree_view, key_event);
 					return true;
@@ -263,8 +263,11 @@ public:
 			font_size_stylesheet = QString("font-size: %1px").arg(FONT_SIZE);
 		}
 
-		setStyleSheet("background-color: black; color: white; border: 0;" + font_size_stylesheet);
-		get_view()->setStyleSheet(get_view_stylesheet_type_name() + "::item::selected{background-color: white; color: black;}");
+		//setStyleSheet("background-color: black; color: white; border: 0;" + font_size_stylesheet);
+		std::wstring ss = (get_status_stylesheet(true) + font_size_stylesheet).toStdWString();
+		setStyleSheet(get_status_stylesheet(true) + font_size_stylesheet);
+		//get_view()->setStyleSheet(get_view_stylesheet_type_name() + "::item::selected{background-color: white; color: black;}");
+		get_view()->setStyleSheet(get_view_stylesheet_type_name() + "::item::selected{" + get_selected_stylesheet() + "}");
 	}
 
 	void resizeEvent(QResizeEvent* resize_event) override {
@@ -722,5 +725,7 @@ public:
 
 std::wstring select_document_file_name();
 std::wstring select_json_file_name();
+std::wstring select_any_file_name();
+std::wstring select_command_file_name(std::string command_name);
 std::wstring select_new_json_file_name();
 std::wstring select_new_pdf_file_name();

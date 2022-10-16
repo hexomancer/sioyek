@@ -15,7 +15,6 @@
 #include <qapplication.h>
 #include <qboxlayout.h>
 #include <qdatetime.h>
-#include <qdesktopwidget.h>
 #include <qkeyevent.h>
 #include <qlabel.h>
 #include <qlineedit.h>
@@ -115,6 +114,7 @@ extern bool SUPER_FAST_SEARCH;
 extern bool SHOW_CLOSEST_BOOKMARK_IN_STATUSBAR;
 extern bool CASE_SENSITIVE_SEARCH;
 extern bool SHOW_DOCUMENT_NAME_IN_STATUSBAR;
+extern std::wstring UI_FONT_FACE_NAME;
 
 const int MAX_SCROLLBAR = 10000;
 
@@ -293,7 +293,15 @@ void MainWidget::closeEvent(QCloseEvent* close_event) {
     handle_close_event();
 }
 
-MainWidget::MainWidget(MainWidget* other) : MainWidget(other->mupdf_context, other->db_manager, other->document_manager, other->config_manager, other->command_manager, other->input_handler, other->checksummer, other->should_quit) {
+MainWidget::MainWidget(MainWidget* other) : MainWidget(
+    other->mupdf_context,
+    other->db_manager,
+    other->document_manager,
+    other->config_manager,
+    other->command_manager,
+    other->input_handler,
+    other->checksummer,
+    other->should_quit) {
 
 }
 
@@ -323,7 +331,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 
     inverse_search_command = INVERSE_SEARCH_COMMAND;
     if (DISPLAY_RESOLUTION_SCALE <= 0){
-        pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, QApplication::desktop()->devicePixelRatioF());
+        pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, QGuiApplication::primaryScreen()->devicePixelRatio());
     }
     else {
         pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, DISPLAY_RESOLUTION_SCALE);
@@ -340,7 +348,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 
     status_label = new QLabel(this);
     status_label->setStyleSheet(get_status_stylesheet());
-    status_label->setFont(QFont("Monaco"));
+    status_label->setFont(QFont(get_font_face_name()));
 
     // automatically open the helper window in second monitor
     int num_screens = QGuiApplication::screens().size();
@@ -357,15 +365,15 @@ MainWidget::MainWidget(fz_context* mupdf_context,
         });
 
     text_command_line_edit_container = new QWidget(this);
-    text_command_line_edit_container->setStyleSheet("background-color: black; color: white; border: none;");
+    text_command_line_edit_container->setStyleSheet(get_status_stylesheet());
 
     QHBoxLayout* text_command_line_edit_container_layout = new QHBoxLayout();
 
     text_command_line_edit_label = new QLabel();
     text_command_line_edit = new QLineEdit();
 
-    text_command_line_edit_label->setFont(QFont("Monaco"));
-    text_command_line_edit->setFont(QFont("Monaco"));
+    text_command_line_edit_label->setFont(QFont(get_font_face_name()));
+    text_command_line_edit->setFont(QFont(get_font_face_name()));
 
     text_command_line_edit_label->setStyleSheet(get_status_stylesheet());
     text_command_line_edit->setStyleSheet(get_status_stylesheet());
@@ -785,33 +793,40 @@ void MainWidget::move_document_screens(int num_screens) {
     move_document(0, move_amount);
 }
 
-QString MainWidget::get_status_stylesheet() {
-    if (STATUS_BAR_FONT_SIZE > -1) {
-        QString	font_size_stylesheet = QString("font-size: %1px").arg(STATUS_BAR_FONT_SIZE);
-        return QString("background-color: %1; color: %2; border: 0; %3").arg(
-            get_color_qml_string(STATUS_BAR_COLOR[0], STATUS_BAR_COLOR[1], STATUS_BAR_COLOR[2]),
-            get_color_qml_string(STATUS_BAR_TEXT_COLOR[0], STATUS_BAR_TEXT_COLOR[1], STATUS_BAR_TEXT_COLOR[2]),
-            font_size_stylesheet
-        );
-    }
-    else{
-        return QString("background-color: %1; color: %2; border: 0").arg(
-            get_color_qml_string(STATUS_BAR_COLOR[0], STATUS_BAR_COLOR[1], STATUS_BAR_COLOR[2]),
-            get_color_qml_string(STATUS_BAR_TEXT_COLOR[0], STATUS_BAR_TEXT_COLOR[1], STATUS_BAR_TEXT_COLOR[2])
-        );
-    }
-}
-
+//QString MainWidget::get_status_stylesheet() {
+//    if (STATUS_BAR_FONT_SIZE > -1) {
+//        QString	font_size_stylesheet = QString("font-size: %1px").arg(STATUS_BAR_FONT_SIZE);
+//        return QString("background-color: %1; color: %2; border: 0; %3").arg(
+//            get_color_qml_string(STATUS_BAR_COLOR[0], STATUS_BAR_COLOR[1], STATUS_BAR_COLOR[2]),
+//            get_color_qml_string(STATUS_BAR_TEXT_COLOR[0], STATUS_BAR_TEXT_COLOR[1], STATUS_BAR_TEXT_COLOR[2]),
+//            font_size_stylesheet
+//        );
+//    }
+//    else{
+//        return QString("background-color: %1; color: %2; border: 0").arg(
+//            get_color_qml_string(STATUS_BAR_COLOR[0], STATUS_BAR_COLOR[1], STATUS_BAR_COLOR[2]),
+//            get_color_qml_string(STATUS_BAR_TEXT_COLOR[0], STATUS_BAR_TEXT_COLOR[1], STATUS_BAR_TEXT_COLOR[2])
+//        );
+//    }
+//}
+//
 
 void MainWidget::on_config_file_changed(ConfigManager* new_config) {
 
     status_label->setStyleSheet(get_status_stylesheet());
+    status_label->setFont(QFont(get_font_face_name()));
+    text_command_line_edit_container->setStyleSheet(get_status_stylesheet());
+    text_command_line_edit->setFont(QFont(get_font_face_name()));
+
+    text_command_line_edit_label->setStyleSheet(get_status_stylesheet());
+    text_command_line_edit->setStyleSheet(get_status_stylesheet());
+    //status_label->setStyleSheet(get_status_stylesheet());
 
     int status_bar_height = get_status_bar_height();
     status_label->move(0, main_window_height - status_bar_height);
     status_label->resize(size().width(), status_bar_height);
 
-    text_command_line_edit_container->setStyleSheet("background-color: black; color: white; border: none;");
+    //text_command_line_edit_container->setStyleSheet("background-color: black; color: white; border: none;");
 }
 
 //void MainWidget::toggle_dark_mode()
@@ -1130,6 +1145,10 @@ void MainWidget::handle_command_with_file_name(const Command* command, std::wstr
     if (command->name == "open_document") {
         open_document(file_name);
     }
+    else if (command->name == "source_config") {
+        config_manager->deserialize_file(file_name);
+        on_config_file_changed(config_manager);
+    }
 }
 
 bool MainWidget::is_waiting_for_symbol() {
@@ -1157,7 +1176,8 @@ void MainWidget::handle_command_types(const Command* command, int num_repeats) {
         return;
     }
     if (command->requires_file_name) {
-        std::wstring file_name = select_document_file_name();
+        std::wstring file_name = select_command_file_name(command->name);
+
         if (file_name.size() > 0) {
             handle_command_with_file_name(command, file_name);
         }
@@ -1669,12 +1689,14 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
     bool is_visual_mark_mode = opengl_widget->get_should_draw_vertical_line() && visual_scroll_mode;
 
 
-    int x = wevent->pos().x();
-    int y = wevent->pos().y();
+    int x = wevent->position().x();
+    int y = wevent->position().y();
     WindowPos mouse_window_pos = { x, y };
     auto [normal_x, normal_y] = main_document_view->window_to_normalized_window_pos(mouse_window_pos);
 
-	int num_repeats = abs(wevent->delta() / 120);
+	int num_repeats = abs(wevent->angleDelta().y() / 120);
+	float num_repeats_f = abs(wevent->angleDelta().y() / 120.0);
+
     if (num_repeats == 0) {
         num_repeats = 1;
     }
@@ -1697,7 +1719,7 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
                     command = command_manager->get_command_with_name("move_visual_mark_up");
                 }
                 else {
-                    move_vertical(-72.0f * vertical_move_amount * num_repeats);
+                    move_vertical(-72.0f * vertical_move_amount * num_repeats_f);
 					update_scrollbar();
                     return;
                 }
@@ -1708,18 +1730,18 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
                     command = command_manager->get_command_with_name("move_visual_mark_down");
                 }
                 else {
-                    move_vertical(72.0f * vertical_move_amount * num_repeats);
+                    move_vertical(72.0f * vertical_move_amount * num_repeats_f);
 					update_scrollbar();
                     return;
                 }
             }
 
             if (wevent->angleDelta().x() > 0) {
-                move_horizontal(-72.0f * horizontal_move_amount);
+                move_horizontal(-72.0f * horizontal_move_amount * num_repeats_f);
                 return;
             }
             if (wevent->angleDelta().x() < 0) {
-                move_horizontal(72.0f * horizontal_move_amount);
+                move_horizontal(72.0f * horizontal_move_amount * num_repeats_f);
                 return;
             }
         }
@@ -2709,6 +2731,9 @@ void MainWidget::handle_command(const Command* command, int num_repeats) {
     else if (command->name == "reload") {
         reload();
     }
+    else if (command->name == "reload_config") {
+		on_config_file_changed(config_manager);
+    }
     else if (command->name == "move_visual_mark_down") {
 		if (opengl_widget->get_overview_page()) {
             scroll_overview_down();
@@ -3236,7 +3261,7 @@ void MainWidget::execute_command(std::wstring command, std::wstring text, bool w
 
     qtext.arg(qfile_path);
 
-    QStringList command_parts_ = qtext.split(QRegExp("\\s+"), QString::SkipEmptyParts);
+    QStringList command_parts_ = qtext.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
     QStringList command_parts;
     while (command_parts_.size() > 0) {
         if ((command_parts_.size() <= 1) || (!command_parts_.at(0).endsWith("\\"))) {
@@ -3374,8 +3399,9 @@ void MainWidget::get_window_params_for_one_window_mode(int* main_window_size, in
         main_window_move[1] = SINGLE_MAIN_WINDOW_MOVE[1];
     }
     else{
-        int window_width = QApplication::desktop()->screenGeometry(0).width();
-        int window_height = QApplication::desktop()->screenGeometry(0).height();
+        int window_width = QGuiApplication::primaryScreen()->geometry().width();
+        int window_height = QGuiApplication::primaryScreen()->geometry().height();
+
         main_window_size[0] = window_width;
         main_window_size[1] = window_height;
         main_window_move[0] = 0;
@@ -3394,12 +3420,15 @@ void MainWidget::get_window_params_for_two_window_mode(int* main_window_size, in
         helper_window_move[1] = HELPER_WINDOW_MOVE[1];
     }
     else {
-        int num_screens = QApplication::desktop()->numScreens();
+        int num_screens = QGuiApplication::screens().size();
         int main_window_width = get_current_monitor_width();
         int main_window_height = get_current_monitor_height();
         if (num_screens > 1) {
-            int second_window_width = QApplication::desktop()->screenGeometry(1).width();
-            int second_window_height = QApplication::desktop()->screenGeometry(1).height();
+            //int second_window_width = QApplication::desktop()->screenGeometry(1).width();
+            //int second_window_height = QApplication::desktop()->screenGeometry(1).height();
+
+            int second_window_width = QGuiApplication::screens().at(1)->geometry().width();
+            int second_window_height = QGuiApplication::screens().at(1)->geometry().height();
             main_window_size[0] = main_window_width;
             main_window_size[1] = main_window_height;
             main_window_move[0] = 0;
@@ -3699,7 +3728,7 @@ std::wstring MainWidget::get_window_configuration_string() {
 	QString helper_window_move_x = QString::number(-1);
 	QString helper_window_move_y = QString::number(-1);
 
-	if (helper_opengl_widget->isVisible()) {
+	if ((helper_opengl_widget != nullptr) && helper_opengl_widget->isVisible()) {
 		helper_window_size_w = QString::number(helper_opengl_widget->size().width());
 		helper_window_size_h = QString::number(helper_opengl_widget->size().height());
 		helper_window_move_x = QString::number(helper_opengl_widget->pos().x());
@@ -3913,7 +3942,7 @@ int MainWidget::get_current_monitor_width() {
 		return this->window()->windowHandle()->screen()->geometry().width();
     }
     else {
-		return QApplication::desktop()->screenGeometry(0).width();
+        return QGuiApplication::primaryScreen()->geometry().width();
     }
 }
 
@@ -3922,7 +3951,7 @@ int MainWidget::get_current_monitor_height() {
 		return this->window()->windowHandle()->screen()->geometry().height();
     }
     else {
-		return QApplication::desktop()->screenGeometry(0).height();
+        return QGuiApplication::primaryScreen()->geometry().height();
     }
 }
 
@@ -4137,6 +4166,10 @@ void MainWidget::run_multiple_commands(const std::wstring& commands) {
 				handle_command_with_text(com, command_arg);
 				continue;
 			}
+            else if (com->requires_file_name) {
+                handle_command_with_file_name(com, command_arg);
+                continue;
+            }
 			else if (com->requires_symbol && command_arg.size() > 0) {
 				handle_command_with_symbol(com, command_arg[0]);
 				continue;
@@ -4203,5 +4236,14 @@ void MainWidget::goto_overview() {
         }
 		opengl_widget->set_overview_page({});
 
+    }
+}
+
+QString MainWidget::get_font_face_name() {
+    if (UI_FONT_FACE_NAME.empty()) {
+        return "Monaco";
+    }
+    else {
+        return QString::fromStdWString(UI_FONT_FACE_NAME);
     }
 }

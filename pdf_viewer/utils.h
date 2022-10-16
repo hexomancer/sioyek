@@ -53,7 +53,7 @@ int argminf(const std::vector<T> &collection, std::function<float(T)> f) {
 void rect_to_quad(fz_rect rect, float quad[8]);
 void copy_to_clipboard(const std::wstring& text, bool selection=false);
 void install_app(const char* argv0);
-int get_f_key(std::string name);
+int get_f_key(std::wstring name);
 void show_error_message(const std::wstring& error_message);
 std::wstring utf8_decode(const std::string& encoded_str);
 std::string utf8_encode(const std::wstring& decoded_str);
@@ -70,7 +70,7 @@ TocNode* get_toc_node_from_indices(const std::vector<TocNode*>& roots, const std
 
 fz_stext_char* find_closest_char_to_document_point(const std::vector<fz_stext_char*> flat_chars, fz_point document_point, int* location_index);
 void merge_selected_character_rects(const std::vector<fz_rect>& selected_character_rects, std::vector<fz_rect>& resulting_rects);
-void split_key_string(std::string haystack, const std::string& needle, std::vector<std::string>& res);
+void split_key_string(std::wstring haystack, const std::wstring& needle, std::vector<std::wstring>& res);
 void run_command(std::wstring command, QStringList parameters, bool wait=true);
 
 std::wstring get_string_from_stext_line(fz_stext_line* line);
@@ -170,3 +170,5 @@ void parse_command_string(std::wstring command_string, std::string& command_name
 void parse_color(std::wstring color_string, float* out_color, int n_components);
 int get_status_bar_height();
 void flat_char_prism(const std::vector<fz_stext_char*> chars, int page, std::wstring& output_text, std::vector<int>& pages, std::vector<fz_rect>& rects);
+QString get_status_stylesheet(bool nofont=false);
+QString get_selected_stylesheet(bool nofont=false);

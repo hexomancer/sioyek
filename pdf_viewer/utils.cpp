@@ -31,6 +31,10 @@ extern std::wstring LIBGEN_ADDRESS;
 extern std::wstring GOOGLE_SCHOLAR_ADDRESS;
 extern std::ofstream LOG_FILE;
 extern int STATUS_BAR_FONT_SIZE;
+extern float STATUS_BAR_COLOR[3];
+extern float STATUS_BAR_TEXT_COLOR[3];
+extern float UI_SELECTED_TEXT_COLOR[3];
+extern float UI_SELECTED_BACKGROUND_COLOR[3];
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -198,7 +202,7 @@ void install_app(const char *argv0)
 #endif
 }
 
-int get_f_key(std::string name) {
+int get_f_key(std::wstring name) {
 	if (name[0] == '<') {
 		name = name.substr(1, name.size() - 2);
 	}
@@ -211,7 +215,7 @@ int get_f_key(std::string name) {
 	}
 
 	int num;
-	std::stringstream ss(name);
+	std::wstringstream ss(name);
 	ss >> num;
 	return  num;
 }
@@ -759,12 +763,12 @@ std::vector<std::wstring> split_whitespace(std::wstring const& input) {
 	return ret;
 }
 
-void split_key_string(std::string haystack, const std::string& needle, std::vector<std::string> &res) {
+void split_key_string(std::wstring haystack, const std::wstring& needle, std::vector<std::wstring> &res) {
 	//todo: we can significantly reduce string allocations in this function if it turns out to be a
 	//performance bottleneck.
 
 	if (haystack == needle){
-		res.push_back("-");
+		res.push_back(L"-");
 		return;
 	}
 
@@ -772,17 +776,17 @@ void split_key_string(std::string haystack, const std::string& needle, std::vect
 	size_t needle_size = needle.size();
 	while ((loc = haystack.find(needle)) != (size_t) -1) {
 
+
+		int skiplen = loc + needle_size;
+		if (loc != 0) {
+			std::wstring part = haystack.substr(0, loc);
+			res.push_back(part);
+		}
 		if ((loc < (haystack.size()-1)) &&  (haystack.substr(needle.size(), needle.size()) == needle)) {
 			// if needle is repeated, one of them is added as a token for example
 			// <C-->
 			// means [C, -]
 			res.push_back(needle);
-		}
-
-		int skiplen = loc + needle_size;
-		if (loc != 0) {
-			std::string part = haystack.substr(0, loc);
-			res.push_back(part);
 		}
 		haystack = haystack.substr(skiplen, haystack.size() - skiplen);
 	}
@@ -1495,18 +1499,21 @@ QCommandLineParser* get_command_line_parser() {
 	parser->setApplicationDescription("Sioyek is a PDF reader designed for reading research papers and technical books.");
 	//parser->addVersionOption();
 
+	//QCommandLineOption reuse_instance_option("reuse-instance");
+	//reuse_instance_option.setDescription("When opening a new file, reuse the previous instance of sioyek instead of opening a new window.");
+	//parser->addOption(reuse_instance_option);
 
-	QCommandLineOption reuse_instance_option("reuse-instance");
-	reuse_instance_option.setDescription("When opening a new file, reuse the previous instance of sioyek instead of opening a new window.");
-	parser->addOption(reuse_instance_option);
-
-	QCommandLineOption new_instance_option("new-instance");
-	new_instance_option.setDescription("When opening a new file, create a new instance of sioyek.");
-	parser->addOption(new_instance_option);
+	//QCommandLineOption new_instance_option("new-instance");
+	//new_instance_option.setDescription("When opening a new file, create a new instance of sioyek.");
+	//parser->addOption(new_instance_option);
 
 	QCommandLineOption new_window_option("new-window");
 	new_window_option.setDescription("Open the file in a new window but within the same sioyek instance.");
 	parser->addOption(new_window_option);
+
+	QCommandLineOption reuse_window_option("reuse-window");
+	reuse_window_option.setDescription("Force sioyek to reuse the current window even when should_launch_new_window is set.");
+	parser->addOption(reuse_window_option);
 
 	QCommandLineOption nofocus_option("nofocus");
 	nofocus_option.setDescription("Do not bring the sioyek instance to foreground.");
@@ -1516,9 +1523,6 @@ QCommandLineParser* get_command_line_parser() {
 	version_option.setDescription("Print sioyek version.");
 	parser->addOption(version_option);
 
-	QCommandLineOption reuse_window_option("reuse-window");
-	reuse_window_option.setDescription("Force sioyek to reuse the current window even when should_launch_new_window is set.");
-	parser->addOption(reuse_window_option);
 
 	QCommandLineOption page_option("page", "Which page to open.", "page");
 	parser->addOption(page_option);
@@ -1825,7 +1829,7 @@ bool is_string_titlish(const std::wstring& str) {
 	if (str.size() <= 5 || str.size() >= 60) {
 		return false;
 	}
-	std::wregex regex(L"([0-9]+\\.)+([0-9]+)*");
+	std::wregex regex(L"([0-9IVXC]+\\.)+([0-9IVXC]+)*");
 	std::wsmatch match;
 
 	std::regex_search(str, match, regex);
@@ -2156,4 +2160,38 @@ void flat_char_prism(const std::vector<fz_stext_char*> chars, int page, std::wst
 		output_text.push_back(chars[j]->c);
 		last_char = chars[j];
 	}
+}
+
+QString get_status_stylesheet(bool nofont) {
+    if ((!nofont) && (STATUS_BAR_FONT_SIZE > -1)) {
+        QString	font_size_stylesheet = QString("font-size: %1px").arg(STATUS_BAR_FONT_SIZE);
+        return QString("background-color: %1; color: %2; border: 0; %3;").arg(
+            get_color_qml_string(STATUS_BAR_COLOR[0], STATUS_BAR_COLOR[1], STATUS_BAR_COLOR[2]),
+            get_color_qml_string(STATUS_BAR_TEXT_COLOR[0], STATUS_BAR_TEXT_COLOR[1], STATUS_BAR_TEXT_COLOR[2]),
+            font_size_stylesheet
+        );
+    }
+    else{
+        return QString("background-color: %1; color: %2; border: 0;").arg(
+            get_color_qml_string(STATUS_BAR_COLOR[0], STATUS_BAR_COLOR[1], STATUS_BAR_COLOR[2]),
+            get_color_qml_string(STATUS_BAR_TEXT_COLOR[0], STATUS_BAR_TEXT_COLOR[1], STATUS_BAR_TEXT_COLOR[2])
+        );
+    }
+}
+
+QString get_selected_stylesheet(bool nofont) {
+    if ((!nofont) && STATUS_BAR_FONT_SIZE > -1) {
+        QString	font_size_stylesheet = QString("font-size: %1px").arg(STATUS_BAR_FONT_SIZE);
+        return QString("background-color: %1; color: %2; border: 0; %3;").arg(
+            get_color_qml_string(UI_SELECTED_BACKGROUND_COLOR[0], UI_SELECTED_BACKGROUND_COLOR[1], UI_SELECTED_BACKGROUND_COLOR[2]),
+            get_color_qml_string(UI_SELECTED_TEXT_COLOR[0], UI_SELECTED_TEXT_COLOR[1], UI_SELECTED_TEXT_COLOR[2]),
+            font_size_stylesheet
+        );
+    }
+    else{
+        return QString("background-color: %1; color: %2; border: 0;").arg(
+            get_color_qml_string(UI_SELECTED_BACKGROUND_COLOR[0], UI_SELECTED_BACKGROUND_COLOR[1], UI_SELECTED_BACKGROUND_COLOR[2]),
+            get_color_qml_string(UI_SELECTED_TEXT_COLOR[0], UI_SELECTED_TEXT_COLOR[1], UI_SELECTED_TEXT_COLOR[2])
+        );
+    }
 }

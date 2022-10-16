@@ -6,7 +6,7 @@ INCLUDEPATH += ./pdf_viewer\
               zlib
           
 
-QT += core opengl gui widgets network 3dinput openglextensions
+QT += core opengl gui widgets network 3dinput openglwidgets
 CONFIG += c++17
 DEFINES += QT_3DINPUT_LIB QT_OPENGL_LIB QT_OPENGLEXTENSIONS_LIB QT_WIDGETS_LIB
 
@@ -91,11 +91,23 @@ unix:!mac {
     target.path = $$PREFIX/bin
     shortcutfiles.files = resources/sioyek.desktop
     shortcutfiles.path = $$PREFIX/share/applications/
-    data.files = resources/sioyek-icon-linux.png
-    data.path = $$PREFIX/share/pixmaps/
-    INSTALLS += shortcutfiles
-    INSTALLS += data
+    icon.files = resources/sioyek-icon-linux.png
+    icon.path = $$PREFIX/share/pixmaps/
+    shaders.files = pdf_viewer/shaders/
+    shaders.path = $$PREFIX/share/sioyek/
+    tutorial.files = tutorial.pdf
+    tutorial.path = $$PREFIX/share/sioyek/
+    keys.files = pdf_viewer/keys.config
+    keys.path = $$PREFIX/etc/sioyek
+    prefs.files = pdf_viewer/prefs.config
+    prefs.path = $$PREFIX/etc/sioyek
     INSTALLS += target
+    INSTALLS += shortcutfiles
+    INSTALLS += icon
+    INSTALLS += shaders
+    INSTALLS += tutorial
+    INSTALLS += keys
+    INSTALLS += prefs	
     DISTFILES += resources/sioyek.desktop\
         resources/sioyek-icon-linux.png
 }
