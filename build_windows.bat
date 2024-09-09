@@ -1,19 +1,16 @@
 cd mupdf\platform\win32\
-msbuild mupdf.sln /property:Configuration=Debug
-msbuild mupdf.sln /property:Configuration=Release
+REM use MT_DynamicRelease for static linking
+msbuild mupdf.sln /property:Configuration=Debug /property:MultiProcessorCompilation=true /property:RuntimeLibrary=MT_DynamicDebug
+msbuild mupdf.sln /property:Configuration=Release /property:MultiProcessorCompilation=true /property:RuntimeLibrary=MT_DynamicRelease
 cd ..\..\..
 
 cd zlib
 nmake -f win32/makefile.msc
 cd ..
 
-if %1 == portable (
-    qmake -tp vc pdf_viewer_build_config.pro
-) else (
-    qmake -tp vc "DEFINES+=NON_PORTABLE" pdf_viewer_build_config.pro
-)
+qmake -tp vc "DEFINES+=NON_PORTABLE" "CONFIG+=release" pdf_viewer_build_config.pro
 
-msbuild -maxcpucount sioyek.vcxproj /property:Configuration=Release
+msbuild -maxcpucount sioyek.vcxproj /property:Configuration=Release /property:RuntimeLibrary=MT_DynamicRelease
 rm -r sioyek-release-windows 2> NUL
 mkdir sioyek-release-windows
 cp release\sioyek.exe sioyek-release-windows\sioyek.exe
