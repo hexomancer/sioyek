@@ -9,7 +9,7 @@ cd ..
 
 qmake -tp vc "DEFINES+=NON_PORTABLE" "CONFIG+=release" pdf_viewer_build_config.pro
 
-msbuild -maxcpucount sioyek.vcxproj /m /property:Configuration=Release
+msbuild -maxcpucount sioyek.vcxproj /m /property:Configuration=Release  /property:RuntimeLibrary=MT_DynamicRelease
 rm -r sioyek-release-windows 2> NUL
 mkdir sioyek-release-windows
 cp release\sioyek.exe sioyek-release-windows\sioyek.exe
