@@ -34,8 +34,8 @@ cp pdf_viewer/keys_user.config sioyek-release/usr/share/keys_user.config
 cp -r pdf_viewer/shaders sioyek-release/usr/bin/shaders
 cp tutorial.pdf sioyek-release/usr/bin/tutorial.pdf
 
-#./linuxdeployqt-continuous-x86_64.AppImage --appdir sioyek-release --plugin qt
-./linuxdeployqt-continuous-x86_64.AppImage ./sioyek-release/usr/share/applications/sioyek.desktop -qmldir=./pdf_viewer/touchui -appimage
+# ./linuxdeployqt-continuous-x86_64.AppImage ./sioyek-release/usr/share/applications/sioyek.desktop -qmldir=./pdf_viewer/touchui -appimage
+./linuxdeployqt-continuous-x86_64.AppImage ./sioyek-release/usr/share/applications/sioyek.desktop -appimage
 
 
 mv Sioyek-* Sioyek-x86_64.AppImage
