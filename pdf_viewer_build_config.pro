@@ -155,12 +155,15 @@ win32{
 
     DEFINES += _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_DEPRECATE NOMINMAX
     RC_ICONS = pdf_viewer\icon2.ico
-    CONFIG(debug){
-        LIBS += -Lmupdf\platform\win32\x64\Debug -llibmupdf -Lzlib -lzlib
-    }
-    CONFIG(release){
-        LIBS += -Lmupdf\platform\win32\x64\Release -llibmupdf -Lzlib -lzlib
-    }
+
+    LIBS += -Lmupdf\platform\win32\x64\Release -llibmupdf -Lzlib -lzlib
+
+    # CONFIG(debug){
+        # LIBS += -Lmupdf\platform\win32\x64\Debug -llibmupdf -Lzlib -lzlib
+    # }
+    # CONFIG(release){
+        # LIBS += -Lmupdf\platform\win32\x64\Release -llibmupdf -Lzlib -lzlib
+    # }
 
     # LIBS += -llibmupdf -Lzlib -lzlib
     #LIBS += -Llibs -llibmupdf
