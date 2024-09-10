@@ -1,7 +1,6 @@
 cd mupdf\platform\win32\
-REM use MT_DynamicRelease for static linking
-msbuild mupdf.sln /property:Configuration=Debug /property:MultiProcessorCompilation=true /property:RuntimeLibrary=MT_DynamicDebug
-msbuild mupdf.sln /property:Configuration=Release /property:MultiProcessorCompilation=true /property:RuntimeLibrary=MT_DynamicRelease
+msbuild -maxcpucount mupdf.sln /property:Configuration=Debug /property:MultiProcessorCompilation=true
+msbuild -maxcpucount mupdf.sln /property:Configuration=Release /property:MultiProcessorCompilation=true
 cd ..\..\..
 
 cd zlib

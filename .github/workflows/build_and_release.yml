@@ -40,7 +40,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./uploads/sioyek-release-mac.zip
+        asset_path: ./mac-uploads/sioyek-release-mac.zip
         asset_name: sioyek-release-mac.zip
         asset_content_type: application/zip   
 
@@ -51,7 +51,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./uploads/sioyek-release-mac-arm.zip
+        asset_path: ./mac-arm-uploads/sioyek-release-mac-arm.zip
         asset_name: sioyek-release-mac-arm.zip
         asset_content_type: application/zip   
 
@@ -62,7 +62,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./uploads/sioyek-release-linux.zip
+        asset_path: ./linux-uploads/sioyek-release-linux.zip
         asset_name: sioyek-release-linux.zip
         asset_content_type: application/zip   
     - name: upload windows
@@ -72,7 +72,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./uploads/sioyek-release-windows.zip
+        asset_path: ./windows-uploads/sioyek-release-windows.zip
         asset_name: sioyek-release-windows.zip
         asset_content_type: application/zip
 
@@ -123,7 +123,7 @@ jobs:
     - name: upload linux artifact
       uses: actions/upload-artifact@v4
       with:
-        name: uploads
+        name: linux-uploads
         path: sioyek-release-linux.zip
     - name: Workaround apt-get cache permission (https://github.com/actions/cache/issues/324)
       run: |
@@ -160,7 +160,7 @@ jobs:
     - name: upload windows artifact
       uses: actions/upload-artifact@v4
       with:
-        name: uploads
+        name: windows-uploads
         path: sioyek-release-windows.zip
         
   build-mac:
@@ -204,7 +204,7 @@ jobs:
     - name: upload mac artifact
       uses: actions/upload-artifact@v4
       with:
-        name: uploads
+        name: mac-uploads
         path: sioyek-release-mac.zip
 
   build-mac-arm:
@@ -249,5 +249,5 @@ jobs:
     - name: upload mac artifact
       uses: actions/upload-artifact@v4
       with:
-        name: uploads
+        name: mac-arm-uploads
         path: sioyek-release-mac-arm.zip
