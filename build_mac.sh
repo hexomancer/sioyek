@@ -55,7 +55,7 @@ fi
 
 # try 5 times to create the dmg
 for i in {1..5} ; do
-  macdeployqt build/sioyek.app -qmldir=./pdf_viewer/touchui -dmg && break
+  macdeployqt build/sioyek.app -qmldir=./pdf_viewer/touchui -dmg || break
   echo "Failed to create the dmg, attempt $i"
   sleep 5
 done
