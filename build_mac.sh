@@ -53,12 +53,9 @@ if [[ -n "$GITHUB_ACTIONS" ]]; then
   echo waiting...; while pgrep XProtect; do sleep 3; done;
 fi
 
-# try 5 times to create the dmg
-for i in {1..5} ; do
-  macdeployqt build/sioyek.app -qmldir=./pdf_viewer/touchui -dmg || break
-  # macdeployqt build/sioyek.app -dmg || break
-  echo "Failed to create the dmg, attempt $i"
-  sleep 5
-done
+sleep 5
+
+macdeployqt build/sioyek.app -qmldir=./pdf_viewer/touchui -dmg
+# macdeployqt build/sioyek.app -dmg
 
 zip -r sioyek-release-mac.zip build/sioyek.dmg
