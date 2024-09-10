@@ -109,7 +109,7 @@ jobs:
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
-        version: '6.7.1'
+        version: '6.7.2'
         modules: 'all'
         cache: true
 
@@ -142,7 +142,7 @@ jobs:
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
-        version: '6.7.1'
+        version: '6.7.2'
         modules: 'all'
         cache: true
 
@@ -191,7 +191,7 @@ jobs:
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
-        version: '6.7.1'
+        version: '6.7.2'
         modules: 'all'
         cache: true
 
@@ -235,7 +235,7 @@ jobs:
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
-        version: '6.7.1'
+        version: '6.7.2'
         modules: 'all'
         cache: true
 
