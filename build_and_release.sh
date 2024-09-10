@@ -35,7 +35,7 @@ cp -r pdf_viewer/shaders sioyek-release/usr/bin/shaders
 cp tutorial.pdf sioyek-release/usr/bin/tutorial.pdf
 
 #./linuxdeployqt-continuous-x86_64.AppImage --appdir sioyek-release --plugin qt
-./linuxdeployqt-continuous-x86_64.AppImage ./sioyek-release/usr/share/applications/sioyek.desktop -appimage
+./linuxdeployqt-continuous-x86_64.AppImage ./sioyek-release/usr/share/applications/sioyek.desktop -qmldir=./pdf_viewer/touchui -appimage
 
 
 mv Sioyek-* Sioyek-x86_64.AppImage
