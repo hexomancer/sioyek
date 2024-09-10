@@ -31,8 +31,8 @@ jobs:
         prerelease: false   
     - name: download artifacts
       uses: actions/download-artifact@v4
-      with:
-        name: uploads     
+      # with:
+      #   name: uploads     
     - name: upload mac
       id: upload-mac
       uses: actions/upload-release-asset@v1.0.1
