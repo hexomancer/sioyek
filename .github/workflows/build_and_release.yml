@@ -121,7 +121,7 @@ jobs:
         CC:   gcc-9
         CXX:  g++-9
     - name: upload linux artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v4
       with:
         name: uploads
         path: sioyek-release-linux.zip
@@ -158,7 +158,7 @@ jobs:
       run: .\build_windows.bat non_portable
       
     - name: upload windows artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v4
       with:
         name: uploads
         path: sioyek-release-windows.zip
@@ -202,7 +202,7 @@ jobs:
         MAKE_PARALLEL=$(sysctl -n hw.logicalcpu) ./build_mac.sh
         
     - name: upload mac artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v4
       with:
         name: uploads
         path: sioyek-release-mac.zip
@@ -247,7 +247,7 @@ jobs:
         mv sioyek-release-mac.zip sioyek-release-mac-arm.zip
         
     - name: upload mac artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v4
       with:
         name: uploads
         path: sioyek-release-mac-arm.zip
