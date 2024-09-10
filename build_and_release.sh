@@ -11,7 +11,7 @@ if [[ ! -f linuxdeployqt-continuous-x86_64.AppImage ]]; then
 fi
 
 cd mupdf
-make USE_SYSTEM_HARFBUZZ=yes
+make USE_SYSTEM_HARFBUZZ=yes -j$MAKE_PARALLEL
 cd ..
 
 if [ -z ${QMAKE+x} ]; then
