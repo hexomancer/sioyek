@@ -153,7 +153,7 @@ win32{
     # enable multiprocessor compilation
     QMAKE_CXXFLAGS += /MP
 
-    DEFINES += _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_DEPRECATE
+    DEFINES += _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_DEPRECATE NOMINMAX
     RC_ICONS = pdf_viewer\icon2.ico
     CONFIG(debug){
         LIBS += -Lmupdf\platform\win32\x64\Debug -llibmupdf -Lzlib -lzlib
