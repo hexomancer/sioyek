@@ -93,6 +93,11 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
+    - name: Install LinuxDeploy
+      uses: miurahr/install-linuxdeploy-action@v1
+      with:
+        plugins: qt appimage
+
     - name: Set up GCC
       uses: egor-tensin/setup-gcc@v1
       with:
@@ -116,7 +121,7 @@ jobs:
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
 
-      run: MAKE_PARALLEL=$(nproc) ./build_and_release.sh
+      run: MAKE_PARALLEL=$(nproc) ./linuxdeploy_build_and_release.sh
       env:
         CC:   gcc-9
         CXX:  g++-9
