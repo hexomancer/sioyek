@@ -5,10 +5,17 @@ if [ -z ${MAKE_PARALLEL+x} ]; then export MAKE_PARALLEL=$(nproc); else echo "MAK
 echo "MAKE_PARALLEL set to $MAKE_PARALLEL"
 
 # download linuxdeployqt if not exists
-# if [[ ! -f linuxdeployqt-continuous-x86_64.AppImage ]]; then
-# 	wget -q https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
-# 	chmod +x linuxdeployqt-continuous-x86_64.AppImage
-# fi
+if [[ ! -f ./linuxdeploy-x86_64.AppImage ]]; then
+    # the continuous version is not working for some reason
+	# wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+	# wget https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+
+    wget https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20240109-1/linuxdeploy-x86_64.AppImage
+    wget https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20240109-1/linuxdeploy-plugin-qt-x86_64.AppImage
+
+	chmod +x linuxdeploy-x86_64.AppImage
+    chmod +x linuxdeploy-plugin-qt-x86_64.AppImage
+fi
 
 cd mupdf
 make USE_SYSTEM_HARFBUZZ=yes -j$MAKE_PARALLEL
@@ -34,7 +41,8 @@ cp pdf_viewer/keys_user.config sioyek-release/usr/share/keys_user.config
 cp -r pdf_viewer/shaders sioyek-release/usr/bin/shaders
 cp tutorial.pdf sioyek-release/usr/bin/tutorial.pdf
 
-QML_SOURCES_PATHS=./pdf_viewer/touchui linuxdeploy-x86_64.AppImage --appdir sioyek-release --plugin qt --output appimage
+QML_SOURCES_PATHS=./pdf_viewer/touchui ./linuxdeploy-x86_64.AppImage --appdir sioyek-release --plugin qt --output appimage
+
 # ./linuxdeployqt-continuous-x86_64.AppImage ./sioyek-release/usr/share/applications/sioyek.desktop -qmldir=./pdf_viewer/touchui -appimage
 # ./linuxdeployqt-continuous-x86_64.AppImage ./sioyek-release/usr/share/applications/sioyek.desktop -appimage
 
