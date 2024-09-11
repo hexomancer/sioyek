@@ -55,7 +55,7 @@ fi
 
 sleep 5
 
-macdeployqt build/sioyek.app -qmldir=./pdf_viewer/touchui -dmg
-# macdeployqt build/sioyek.app -dmg
+# macdeployqt build/sioyek.app -qmldir=./pdf_viewer/touchui -dmg
+macdeployqt build/sioyek.app -dmg
 
 zip -r sioyek-release-mac.zip build/sioyek.dmg

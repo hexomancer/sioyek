@@ -47,5 +47,5 @@ QML_SOURCES_PATHS=./pdf_viewer/touchui ./linuxdeploy-x86_64.AppImage --appdir si
 # ./linuxdeployqt-continuous-x86_64.AppImage ./sioyek-release/usr/share/applications/sioyek.desktop -appimage
 
 
-mv Sioyek-* Sioyek-x86_64.AppImage
+# mv Sioyek-* Sioyek-x86_64.AppImage
 zip sioyek-release-linux.zip Sioyek-x86_64.AppImage
